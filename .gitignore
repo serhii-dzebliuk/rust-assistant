@@ -1,0 +1,31 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# --- Virtual env ---
+.venv/
+venv/
+env/
+
+# --- Environment variables ---
+.env
+
+# --- Data artifacts (RAG specific) ---
+data/raw/
+data/processed/
+data/chunks/
+data/vectordb/
+
+# --- Logs ---
+*.log
+
+# --- IDE ---
+.vscode/
+.idea/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
