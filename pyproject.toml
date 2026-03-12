@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rustrag"
+version = "0.1.0"
+description = "RAG assistant for Rust documentation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Core
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    
+    # Parsing
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    
+    # API
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    
+    # Vector DB
+    "chromadb>=0.4.0",
+    
+    # Utils
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "ruff>=0.0.280",
+]
+
+[tool.setuptools]
+packages = ["rustrag"]
+package-dir = {"" = "src"}
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

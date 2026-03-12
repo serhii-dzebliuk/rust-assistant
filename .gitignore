@@ -5,6 +5,12 @@ __pycache__/
 *.pyd
 *.so
 
+# Build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+
 # --- Virtual env ---
 .venv/
 venv/
