@@ -6,7 +6,6 @@ Defines contracts for Documents, Chunks, and Search Results.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -43,19 +42,24 @@ class Crate(str, Enum):
     UNKNOWN = "unknown"
 
 
+class SourceType(str, Enum):
+    BOOK = "book"
+    REFERENCE = "reference"
+    CARGO = "cargo"
+    RUSTDOC = "rustdoc"
+
+
 class DocumentMetadata(BaseModel):
     """Metadata for a Rust documentation document."""
-    crate: Crate = Crate.UNKNOWN
-    item_path: Optional[str] = None  # e.g., "std::vec::Vec::push"
-    item_type: ItemType = ItemType.UNKNOWN
-    rust_version: Optional[str] = None
-    url: Optional[str] = None
-    raw_html_path: Optional[str] = None  # path to original HTML file
-    scraped_at: Optional[datetime] = None
+    crate: Crate = Crate.UNKNOWN  # Top-level docs source, for example "book" or "std".
+    item_path: Optional[str] = None  # Canonical item/page path, for example "std::vec::Vec".
+    item_type: Optional[ItemType] = None  # Rust item kind when modeled, mainly for rustdoc pages.
+    rust_version: Optional[str] = None  # Docs snapshot version, for example "1.91.1".
+    url: Optional[str] = None  # Canonical online URL for the source document.
+    raw_html_path: Optional[str] = None  # Absolute path to the original local HTML file.
 
     # Additional fields for filtering/debugging
-    breadcrumbs: Optional[list[str]] = None
-    parent_module: Optional[str] = None
+    breadcrumbs: Optional[list[str]] = None  # Optional navigation trail extracted from the page.
 
 
 class Document(BaseModel):
@@ -96,11 +100,11 @@ class Document(BaseModel):
 class ChunkMetadata(BaseModel):
     """Metadata for a document chunk."""
     # Inherited from Document
-    crate: Crate
-    item_path: Optional[str] = None
-    item_type: ItemType
-    rust_version: Optional[str] = None
-    url: Optional[str] = None
+    crate: Crate  # Top-level docs source inherited from the parent document.
+    item_path: Optional[str] = None  # Canonical item/page path inherited from the parent document.
+    item_type: Optional[ItemType] = None  # Rust item kind inherited from the parent document.
+    rust_version: Optional[str] = None  # Docs snapshot version inherited from the parent document.
+    url: Optional[str] = None  # Canonical online URL inherited from the parent document.
 
     # Chunk-specific
     section: Optional[str] = None  # e.g., "Examples", "Panics", "Safety"

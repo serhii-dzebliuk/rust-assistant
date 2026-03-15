@@ -9,6 +9,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from bs4 import BeautifulSoup, Tag
+
 from ..models import Crate
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,15 @@ logger = logging.getLogger(__name__)
 
 class DocumentDiscoverer:
     """Discovers HTML documentation files in data/raw/."""
+
+    BOOK_EXCLUDE_FILES = {
+        "README.html",
+        "SUMMARY.html",
+        "title-page.html",
+    }
+    STD_EXCLUDE_FILES = {
+        "all.html",
+    }
 
     # Files and patterns to exclude
     EXCLUDE_PATTERNS = {
@@ -73,6 +84,7 @@ class DocumentDiscoverer:
         if crates is None:
             crates = [Crate.STD, Crate.BOOK, Crate.CARGO, Crate.REFERENCE]
 
+        logger.info("Discovering HTML files for crates=%s, limit=%s", [c.value for c in crates], limit)
         html_files = []
         for crate in crates:
             crate_dir = self.raw_data_dir / crate.value
@@ -83,12 +95,14 @@ class DocumentDiscoverer:
 
             crate_files = self._discover_in_directory(crate_dir, crate)
             html_files.extend(crate_files)
+            logger.info("Discovered %s files in crate=%s", len(crate_files), crate.value)
 
             if limit and len(html_files) >= limit:
                 html_files = html_files[:limit]
+                logger.info("Discovery reached limit=%s; truncating results", limit)
                 break
 
-        logger.info(f"Discovered {len(html_files)} HTML files")
+        logger.info("Discovery complete: %s HTML files total", len(html_files))
         return html_files
 
     def _discover_in_directory(self, directory: Path, crate: Crate) -> list[Path]:
@@ -109,6 +123,13 @@ class DocumentDiscoverer:
             if any(excluded_dir in path.parts for excluded_dir in self.EXCLUDE_DIRS):
                 continue
 
+            if crate == Crate.BOOK and path.name in self.BOOK_EXCLUDE_FILES:
+                continue
+            if crate == Crate.STD and path.name in self.STD_EXCLUDE_FILES:
+                continue
+            if crate == Crate.REFERENCE and path.name.endswith("-redirect.html"):
+                continue
+
             # Skip excluded patterns
             if any(path.match(pattern) for pattern in self.EXCLUDE_PATTERNS):
                 continue
@@ -117,10 +138,78 @@ class DocumentDiscoverer:
             if not path.is_file():
                 continue
 
+            if self._is_html_redirect(path):
+                continue
+
+            if crate == Crate.BOOK and self._is_book_legacy_page(path):
+                continue
+            if crate != Crate.STD and not self._has_meaningful_main_content(path):
+                continue
+
             html_files.append(path)
 
         logger.debug(f"Found {len(html_files)} files in {crate.value}/")
         return html_files
+
+    def _is_html_redirect(self, path: Path) -> bool:
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                head = handle.read(2048).lower()
+        except OSError:
+            logger.debug(f"Could not read file during redirect check: {path}")
+            return False
+
+        return (
+            'http-equiv="refresh"' in head
+            and "url=" in head
+            and (
+                "<title>redirection</title>" in head
+                or "<title>redirecting...</title>" in head
+                or "redirecting to..." in head
+                or "window.location.replace(" in head
+            )
+        )
+
+    def _is_book_legacy_page(self, path: Path) -> bool:
+        legacy_marker = "there is a new edition of the book and this is an old link."
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                head = handle.read(4096).lower()
+        except OSError:
+            logger.debug(f"Could not read file during legacy book check: {path}")
+            return False
+
+        return legacy_marker in head
+
+    def _has_meaningful_main_content(self, path: Path) -> bool:
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                soup = BeautifulSoup(handle.read(), "lxml")
+        except OSError:
+            logger.debug(f"Could not read file during content check: {path}")
+            return True
+
+        root = None
+        for selector in ("main", "section.normal", "article", "div#content", "body"):
+            root = soup.select_one(selector)
+            if isinstance(root, Tag):
+                break
+        if not isinstance(root, Tag):
+            return False
+
+        for selector in ("script", "style", "noscript", "nav", "aside", "header", "footer", ".sidebar", "#sidebar", "button"):
+            for node in root.select(selector):
+                node.decompose()
+
+        meaningful_tags = ("p", "li", "pre", "table", "blockquote", "dl")
+        if any(root.find(tag) for tag in meaningful_tags):
+            return True
+
+        for heading in root.find_all(("h1", "h2", "h3", "h4", "h5", "h6")):
+            if heading.get_text(" ", strip=True):
+                continue
+
+        return False
 
     def get_relative_path(self, absolute_path: Path) -> Path:
         """
