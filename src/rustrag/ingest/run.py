@@ -1,3 +1,5 @@
+"""CLI entry point for ingest pipeline execution."""
+
 from __future__ import annotations
 
 import argparse
@@ -6,10 +8,11 @@ from pathlib import Path
 
 from .pipeline import run_pipeline
 
-logger = logging.getLogger(__name__)
-
 
 def build_parser() -> argparse.ArgumentParser:
+    """
+    Build command-line parser for ingest pipeline execution.
+    """
     parser = argparse.ArgumentParser(description="Run the RustRAG ingest pipeline")
     parser.add_argument(
         "--stage",
@@ -36,22 +39,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum number of files to process",
     )
     parser.add_argument(
-        "--docs-output",
+        "--parse_output",
         type=Path,
-        default="data/processed/docs.jsonl",
-        help="Output path for parsed documents (default: data/processed/docs.jsonl)",
+        default="data/processed/docs_parsed.jsonl",
+        help="Output path for parsed documents (default: data/processed/docs_parsed.jsonl)",
     )
     parser.add_argument(
         "--clean-output",
         type=Path,
-        default="data/processed/docs_clean.jsonl",
-        help="Output path for cleaned documents (default: data/processed/docs_clean.jsonl)",
+        default="data/processed/docs_cleaned.jsonl",
+        help="Output path for cleaned documents (default: data/processed/docs_cleaned.jsonl)",
     )
     parser.add_argument(
         "--dedup-output",
         type=Path,
-        default="data/processed/docs_dedup.jsonl",
-        help="Output path for deduplicated documents (default: data/processed/docs_dedup.jsonl)",
+        default="data/processed/docs_deduped.jsonl",
+        help="Output path for deduplicated documents (default: data/processed/docs_deduped.jsonl)",
     )
     parser.add_argument(
         "--verbose",
@@ -63,6 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """
+    Run ingest pipeline from command line.
+
+    Example:
+        >>> # python -m rustrag.ingest.run --stage all --crate std --limit 100 --verbose
+    """
     parser = build_parser()
     args = parser.parse_args()
 
@@ -76,7 +85,7 @@ def main() -> int:
         raw_data_dir=args.raw_dir,
         crates=args.crate,
         limit=args.limit,
-        docs_output=args.docs_output,
+        parsing_output=args.parse_output,
         clean_output=args.clean_output,
         dedup_output=args.dedup_output,
     )
@@ -85,14 +94,14 @@ def main() -> int:
         print(f"Discovered files: {len(result)}")
     elif args.stage == "parse":
         print(f"Parsed documents: {len(result)}")
-        print(f"Saved parsed docs to: {args.docs_output}")
+        print(f"Saved parsed docs to: {args.parse_output}")
     elif args.stage == "clean":
         print(f"Cleaned documents: {len(result)}")
-        print(f"Saved parsed docs to: {args.docs_output}")
+        print(f"Saved parsed docs to: {args.parse_output}")
         print(f"Saved cleaned docs to: {args.clean_output}")
     else:
         print(f"Deduplicated documents: {len(result)}")
-        print(f"Saved parsed docs to: {args.docs_output}")
+        print(f"Saved parsed docs to: {args.parse_output}")
         print(f"Saved cleaned docs to: {args.clean_output}")
         print(f"Saved deduplicated docs to: {args.dedup_output}")
 

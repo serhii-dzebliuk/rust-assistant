@@ -1,13 +1,14 @@
 """
-Discover HTML documentation files from data/raw/.
-Stage 1.2 of the ingest pipeline.
+Discover HTML documentation files from `data/raw`.
+
+This module implements ingest stage 1.2.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 from bs4 import BeautifulSoup, Tag
 
@@ -17,52 +18,82 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentDiscoverer:
-    """Discovers HTML documentation files in data/raw/."""
+    """
+    Discover HTML files that should be parsed into documents.
 
-    BOOK_EXCLUDE_FILES = {
-        "README.html",
-        "SUMMARY.html",
-        "title-page.html",
-    }
-    STD_EXCLUDE_FILES = {
-        "all.html",
-    }
+    The discoverer applies crate-specific exclusion rules and content-based
+    checks to skip redirects, legacy aliases, static assets, and empty pages.
+    """
 
-    # Files and patterns to exclude
+    DEFAULT_CRATES: tuple[Crate, ...] = (
+        Crate.STD,
+        Crate.BOOK,
+        Crate.CARGO,
+        Crate.REFERENCE,
+    )
+
+    BOOK_EXCLUDE_FILES = {"README.html", "SUMMARY.html", "title-page.html"}
+    STD_EXCLUDE_FILES = {"all.html"}
+
     EXCLUDE_PATTERNS = {
-        # JavaScript files
         "*.js",
-        # CSS and style files
         "*.css",
-        # Image files
-        "*.png", "*.jpg", "*.jpeg", "*.svg", "*.gif", "*.ico",
-        # Font files
-        "*.woff", "*.woff2", "*.ttf", "*.eot",
-        # Other assets
-        "*.json", "*.txt", "*.md", ".nojekyll",
-        # Special pages
+        "*.png",
+        "*.jpg",
+        "*.jpeg",
+        "*.svg",
+        "*.gif",
+        "*.ico",
+        "*.woff",
+        "*.woff2",
+        "*.ttf",
+        "*.eot",
+        "*.json",
+        "*.txt",
+        "*.md",
+        ".nojekyll",
         "search-index*.js",
         "searchindex*.js",
         "sidebar-items*.js",
-        "print.html",  # Print version (duplicate content)
-        "toc.html",  # Table of contents (navigation)
+        "print.html",
+        "toc.html",
     }
 
-    # Directories to exclude
     EXCLUDE_DIRS = {
-        "theme", "css", "fonts", "FontAwesome", "images", "img",
-        ".git", ".venv", "__pycache__",
-        "first-edition", "second-edition", "2018-edition",  # Old book editions
+        "theme",
+        "css",
+        "fonts",
+        "FontAwesome",
+        "images",
+        "img",
+        ".git",
+        ".venv",
+        "__pycache__",
+        "first-edition",
+        "second-edition",
+        "2018-edition",
     }
 
-    def __init__(self, raw_data_dir: Path):
+    MEANINGFUL_CONTENT_TAGS: tuple[str, ...] = ("p", "li", "pre", "table", "blockquote", "dl")
+    MAIN_SELECTORS: tuple[str, ...] = ("main", "section.normal", "article", "div#content", "body")
+    NOISE_SELECTORS: tuple[str, ...] = (
+        "script",
+        "style",
+        "noscript",
+        "nav",
+        "aside",
+        "header",
+        "footer",
+        ".sidebar",
+        "#sidebar",
+        "button",
+    )
+
+    def __init__(self, raw_data_dir: Path | str):
         """
         Initialize discoverer.
-
-        Args:
-            raw_data_dir: Path to data/raw/ directory
         """
-        self.raw_data_dir = Path(raw_data_dir).resolve()  # Convert to absolute path
+        self.raw_data_dir = Path(raw_data_dir).resolve()
         if not self.raw_data_dir.exists():
             raise ValueError(f"Raw data directory does not exist: {raw_data_dir}")
 
@@ -72,25 +103,33 @@ class DocumentDiscoverer:
         limit: Optional[int] = None,
     ) -> list[Path]:
         """
-        Discover HTML files in raw data directory.
+        Discover HTML files that are eligible for parsing.
 
         Args:
-            crates: List of crates to include (None = all)
-            limit: Maximum number of files to return (None = all)
+            crates: Optional crate list. If `None`, default crates are used.
+            limit: Optional global limit for discovered files.
 
         Returns:
-            List of paths to HTML files, relative to raw_data_dir
+            List of absolute HTML paths selected for parsing.
+
+        Example:
+            >>> discoverer = DocumentDiscoverer("data/raw")
+            >>> files = discoverer.discover(crates=[Crate.STD], limit=100)
+            >>> len(files) <= 100
+            True
         """
-        if crates is None:
-            crates = [Crate.STD, Crate.BOOK, Crate.CARGO, Crate.REFERENCE]
+        selected_crates = crates or list(self.DEFAULT_CRATES)
+        logger.info(
+            "Discovering HTML files for crates=%s, limit=%s",
+            [crate.value for crate in selected_crates],
+            limit,
+        )
 
-        logger.info("Discovering HTML files for crates=%s, limit=%s", [c.value for c in crates], limit)
-        html_files = []
-        for crate in crates:
+        html_files: list[Path] = []
+        for crate in selected_crates:
             crate_dir = self.raw_data_dir / crate.value
-
             if not crate_dir.exists():
-                logger.warning(f"Crate directory not found: {crate_dir}")
+                logger.warning("Crate directory not found: %s", crate_dir)
                 continue
 
             crate_files = self._discover_in_directory(crate_dir, crate)
@@ -98,8 +137,8 @@ class DocumentDiscoverer:
             logger.info("Discovered %s files in crate=%s", len(crate_files), crate.value)
 
             if limit and len(html_files) >= limit:
-                html_files = html_files[:limit]
                 logger.info("Discovery reached limit=%s; truncating results", limit)
+                html_files = html_files[:limit]
                 break
 
         logger.info("Discovery complete: %s HTML files total", len(html_files))
@@ -107,56 +146,84 @@ class DocumentDiscoverer:
 
     def _discover_in_directory(self, directory: Path, crate: Crate) -> list[Path]:
         """
-        Recursively discover HTML files in a directory.
+        Discover crate HTML files by traversing a directory tree.
 
         Args:
-            directory: Directory to search
-            crate: Crate this directory belongs to
+            directory: Crate root directory under `data/raw`.
+            crate: Crate identifier for crate-specific rules.
 
         Returns:
-            List of HTML file paths
+            List of discovered file paths for the crate.
         """
-        html_files = []
-
+        html_files: list[Path] = []
         for path in directory.rglob("*.html"):
-            # Skip excluded directories
-            if any(excluded_dir in path.parts for excluded_dir in self.EXCLUDE_DIRS):
+            if self._should_skip_path(path, crate):
                 continue
-
-            if crate == Crate.BOOK and path.name in self.BOOK_EXCLUDE_FILES:
-                continue
-            if crate == Crate.STD and path.name in self.STD_EXCLUDE_FILES:
-                continue
-            if crate == Crate.REFERENCE and path.name.endswith("-redirect.html"):
-                continue
-
-            # Skip excluded patterns
-            if any(path.match(pattern) for pattern in self.EXCLUDE_PATTERNS):
-                continue
-
-            # Skip if file is not readable
-            if not path.is_file():
-                continue
-
-            if self._is_html_redirect(path):
-                continue
-
-            if crate == Crate.BOOK and self._is_book_legacy_page(path):
-                continue
-            if crate != Crate.STD and not self._has_meaningful_main_content(path):
-                continue
-
             html_files.append(path)
-
-        logger.debug(f"Found {len(html_files)} files in {crate.value}/")
+        logger.debug("Found %s files in %s/", len(html_files), crate.value)
         return html_files
 
-    def _is_html_redirect(self, path: Path) -> bool:
+    def _should_skip_path(self, path: Path, crate: Crate) -> bool:
+        """
+        Check whether a candidate HTML path should be excluded from discovery.
+
+        Args:
+            path: Candidate HTML file path.
+            crate: Crate identifier for crate-specific skip rules.
+
+        Returns:
+            `True` when file should be excluded, `False` otherwise.
+        """
+        if any(excluded_dir in path.parts for excluded_dir in self.EXCLUDE_DIRS):
+            return True
+        if any(path.match(pattern) for pattern in self.EXCLUDE_PATTERNS):
+            return True
+        if not path.is_file():
+            return True
+        if crate == Crate.BOOK and path.name in self.BOOK_EXCLUDE_FILES:
+            return True
+        if crate == Crate.STD and path.name in self.STD_EXCLUDE_FILES:
+            return True
+        if crate == Crate.REFERENCE and path.name.endswith("-redirect.html"):
+            return True
+        if self._is_html_redirect(path):
+            return True
+        if crate == Crate.BOOK and self._is_book_legacy_page(path):
+            return True
+        if crate != Crate.STD and not self._has_meaningful_main_content(path):
+            return True
+        return False
+
+    def _read_head(self, path: Path, bytes_count: int) -> str | None:
+        """
+        Read initial chunk of a file for lightweight content checks.
+
+        Args:
+            path: Path to source HTML file.
+            bytes_count: Number of characters to read from file start.
+
+        Returns:
+            Lower-cased head content or `None` when file cannot be read.
+        """
         try:
             with path.open("r", encoding="utf-8", errors="replace") as handle:
-                head = handle.read(2048).lower()
+                return handle.read(bytes_count).lower()
         except OSError:
-            logger.debug(f"Could not read file during redirect check: {path}")
+            logger.debug("Could not read file during discovery check: %s", path)
+            return None
+
+    def _is_html_redirect(self, path: Path) -> bool:
+        """
+        Detect simple HTML redirect pages.
+
+        Args:
+            path: Candidate HTML file path.
+
+        Returns:
+            `True` for redirect-like pages, otherwise `False`.
+        """
+        head = self._read_head(path, 2048)
+        if head is None:
             return False
 
         return (
@@ -171,87 +238,75 @@ class DocumentDiscoverer:
         )
 
     def _is_book_legacy_page(self, path: Path) -> bool:
-        legacy_marker = "there is a new edition of the book and this is an old link."
-        try:
-            with path.open("r", encoding="utf-8", errors="replace") as handle:
-                head = handle.read(4096).lower()
-        except OSError:
-            logger.debug(f"Could not read file during legacy book check: {path}")
-            return False
+        """
+        Detect legacy Rust Book alias pages.
 
+        Args:
+            path: Candidate HTML file path.
+
+        Returns:
+            `True` when file contains legacy marker text.
+        """
+        head = self._read_head(path, 4096)
+        if head is None:
+            return False
+        legacy_marker = "there is a new edition of the book and this is an old link."
         return legacy_marker in head
 
+    def _select_main_root(self, soup: BeautifulSoup) -> Tag | None:
+        """
+        Select best effort main content root for lightweight content checks.
+
+        Args:
+            soup: Parsed HTML document.
+
+        Returns:
+            Main root `Tag` or `None` if no selectors match.
+        """
+        for selector in self.MAIN_SELECTORS:
+            root = soup.select_one(selector)
+            if isinstance(root, Tag):
+                return root
+        return None
+
+    def _remove_noise_nodes(self, root: Tag) -> None:
+        """
+        Remove known layout and navigation noise from a content root.
+
+        Args:
+            root: Root tag selected for meaningful-content checks.
+        """
+        for selector in self.NOISE_SELECTORS:
+            for node in root.select(selector):
+                node.decompose()
+
     def _has_meaningful_main_content(self, path: Path) -> bool:
+        """
+        Check whether an HTML page has meaningful content beyond heading shells.
+
+        Args:
+            path: Candidate HTML file path.
+
+        Returns:
+            `True` when page appears to contain useful parseable content.
+        """
         try:
             with path.open("r", encoding="utf-8", errors="replace") as handle:
                 soup = BeautifulSoup(handle.read(), "lxml")
         except OSError:
-            logger.debug(f"Could not read file during content check: {path}")
+            logger.debug("Could not read file during content check: %s", path)
             return True
 
-        root = None
-        for selector in ("main", "section.normal", "article", "div#content", "body"):
-            root = soup.select_one(selector)
-            if isinstance(root, Tag):
-                break
+        root = self._select_main_root(soup)
         if not isinstance(root, Tag):
             return False
+        self._remove_noise_nodes(root)
 
-        for selector in ("script", "style", "noscript", "nav", "aside", "header", "footer", ".sidebar", "#sidebar", "button"):
-            for node in root.select(selector):
-                node.decompose()
-
-        meaningful_tags = ("p", "li", "pre", "table", "blockquote", "dl")
-        if any(root.find(tag) for tag in meaningful_tags):
+        if any(root.find(tag) for tag in self.MEANINGFUL_CONTENT_TAGS):
             return True
 
-        for heading in root.find_all(("h1", "h2", "h3", "h4", "h5", "h6")):
-            if heading.get_text(" ", strip=True):
-                continue
-
+        # Heading-only pages are considered non-meaningful for non-rustdoc crates.
         return False
-
-    def get_relative_path(self, absolute_path: Path) -> Path:
-        """
-        Get path relative to raw_data_dir.
-
-        Args:
-            absolute_path: Absolute file path
-
-        Returns:
-            Path relative to raw_data_dir
-        """
-        return absolute_path.relative_to(self.raw_data_dir)
-
-    def get_crate_from_path(self, path: Path) -> Crate:
-        """
-        Determine crate from file path.
-
-        Args:
-            path: File path (absolute or relative to raw_data_dir)
-
-        Returns:
-            Crate enum value
-        """
-        # Get relative path if absolute
-        if path.is_absolute():
-            try:
-                path = self.get_relative_path(path)
-            except ValueError:
-                logger.debug(f"Could not get relative path for {path}")
-                return Crate.UNKNOWN
-
-        # First part of path should be crate name
-        parts = path.parts
-        if not parts:
-            return Crate.UNKNOWN
-
-        crate_name = parts[0]
-        try:
-            return Crate(crate_name)
-        except ValueError:
-            logger.debug(f"Unknown crate name: {crate_name}")
-            return Crate.UNKNOWN
 
 
 def discover_documents(
@@ -260,103 +315,43 @@ def discover_documents(
     limit: Optional[int] = None,
 ) -> list[Path]:
     """
-    Convenient function to discover HTML documents.
+    Discover HTML source files eligible for parsing.
 
     Args:
-        raw_data_dir: Path to raw data directory
-        crates: List of crate names to include (e.g., ["std", "book"])
-        limit: Maximum number of files to return
+        raw_data_dir: Root directory with raw HTML sources.
+        crates: Optional crate-name filters (`std`, `book`, etc.).
+        limit: Optional global maximum number of returned files.
 
     Returns:
-        List of HTML file paths
+        List of discovered HTML file paths.
 
     Example:
-        >>> files = discover_documents(crates=["std"], limit=100)
-        >>> print(f"Found {len(files)} files")
+        >>> files = discover_documents(crates=["std"], limit=50)
+        >>> len(files) <= 50
+        True
     """
-    raw_data_dir = Path(raw_data_dir)
-
-    # Convert crate names to Crate enums
-    crate_enums = None
-    if crates:
-        crate_enums = []
-        for crate_name in crates:
-            try:
-                crate_enums.append(Crate(crate_name))
-            except ValueError:
-                logger.warning(f"Unknown crate: {crate_name}")
-
     discoverer = DocumentDiscoverer(raw_data_dir)
+    crate_enums = _try_parse_crates(crates)
     return discoverer.discover(crates=crate_enums, limit=limit)
 
 
-def main():
-    """CLI entry point for discovery."""
-    import argparse
+def _try_parse_crates(crate_names: Optional[Iterable[str]]) -> Optional[list[Crate]]:
+    """
+    Convert crate-name strings to `Crate` enum values.
 
-    parser = argparse.ArgumentParser(description="Discover Rust documentation HTML files")
-    parser.add_argument(
-        "--raw-dir",
-        type=Path,
-        default="data/raw",
-        help="Path to raw data directory (default: data/raw)",
-    )
-    parser.add_argument(
-        "--crate",
-        type=str,
-        action="append",
-        choices=["std", "book", "cargo", "reference"],
-        help="Crate(s) to include (can be specified multiple times, default: all)",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        help="Maximum number of files to discover",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose logging",
-    )
+    Args:
+        crate_names: Optional iterable with crate names.
 
-    args = parser.parse_args()
+    Returns:
+        List of crate enums or `None` when no filters are provided.
+    """
+    if not crate_names:
+        return None
 
-    # Setup logging
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    # Discover files
-    files = discover_documents(
-        raw_data_dir=args.raw_dir,
-        crates=args.crate,
-        limit=args.limit,
-    )
-
-    # Print results
-    discoverer = DocumentDiscoverer(args.raw_dir)
-    print(f"\nDiscovered {len(files)} HTML files:")
-    print("-" * 60)
-
-    # Group by crate
-    by_crate = {}
-    for file_path in files:
-        crate = discoverer.get_crate_from_path(file_path)
-        if crate not in by_crate:
-            by_crate[crate] = []
-        by_crate[crate].append(file_path)
-
-    for crate, paths in sorted(by_crate.items()):
-        print(f"\n{crate.value}: {len(paths)} files")
-        if args.verbose:
-            for path in sorted(paths)[:10]:  # Show first 10
-                rel_path = discoverer.get_relative_path(path)
-                print(f"  - {rel_path}")
-            if len(paths) > 10:
-                print(f"  ... and {len(paths) - 10} more")
-
-
-if __name__ == "__main__":
-    main()
+    crate_enums: list[Crate] = []
+    for crate_name in crate_names:
+        try:
+            crate_enums.append(Crate(crate_name))
+        except ValueError:
+            logger.warning("Unknown crate: %s", crate_name)
+    return crate_enums

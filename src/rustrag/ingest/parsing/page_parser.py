@@ -7,19 +7,27 @@ from typing import Optional
 
 from bs4 import BeautifulSoup
 
-from rustrag.ingest.parsing.adapters.factory import get_adapter
-from rustrag.ingest.parsing.utils import (
+from rustrag.models import Crate, Document, DocumentMetadata, ItemType
+
+from .adapters.factory import get_adapter
+from .utils import (
     detect_crate_from_path,
     map_to_source_type,
     source_path_from_raw,
     source_path_to_url,
 )
-from rustrag.models import ItemType, DocumentMetadata, Document, Crate
 
 logger = logging.getLogger(__name__)
 
+
 class PageParser:
-    """Parser orchestrator with source-specific adapters."""
+    """
+    Parse a single HTML file into a normalized `Document`.
+
+    The parser delegates source-specific behavior to adapters and enriches
+    parsed text with metadata such as crate, item path, item type, version,
+    and canonical URL.
+    """
 
     ITEM_TYPE_PATTERNS = {
         ItemType.FUNCTION: (r"\bfn\b", r"\bfunction\b"),
@@ -58,10 +66,25 @@ class PageParser:
     }
 
     def __init__(self, raw_data_dir: Path | str):
+        """
+        Initialize parser with raw data root path.
+
+        Args:
+            raw_data_dir: Root path used for source-path and version resolution.
+        """
         self.raw_data_dir = Path(raw_data_dir).resolve()
         self._rust_versions: dict[Crate, str | None] = {}
 
     def parse_file(self, file_path: Path) -> Optional[Document]:
+        """
+        Parse one HTML file into a `Document`.
+
+        Args:
+            file_path: Absolute or relative HTML file path.
+
+        Returns:
+            Parsed `Document` on success, otherwise `None`.
+        """
         try:
             html_content = file_path.read_text(encoding="utf-8", errors="replace")
             soup = BeautifulSoup(html_content, "lxml")
@@ -112,6 +135,15 @@ class PageParser:
             return None
 
     def _extract_breadcrumbs(self, soup: BeautifulSoup) -> Optional[list[str]]:
+        """
+        Extract breadcrumb trail when available.
+
+        Args:
+            soup: Parsed HTML document.
+
+        Returns:
+            Breadcrumb list or `None` if no breadcrumbs are present.
+        """
         nav = soup.select_one("nav.sub")
         if nav:
             items = [a.get_text(" ", strip=True) for a in nav.find_all("a")]
@@ -124,8 +156,32 @@ class PageParser:
                 return items
         return None
 
-    def _extract_item_path(self, soup: BeautifulSoup, file_path: Path, crate: Crate, title: str) -> Optional[str]:
-        if crate in {Crate.STD, Crate.CORE, Crate.ALLOC, Crate.PROC_MACRO, Crate.TEST}:
+    def _extract_item_path(
+        self,
+        soup: BeautifulSoup,
+        file_path: Path,
+        crate: Crate,
+        title: str,
+    ) -> Optional[str]:
+        """
+        Build stable metadata item path for a parsed page.
+
+        Args:
+            soup: Parsed HTML document.
+            file_path: Source HTML file path.
+            crate: Detected crate for the source page.
+            title: Resolved document title.
+
+        Returns:
+            Canonical item path string or `None` when path cannot be inferred.
+        """
+        if crate in {
+            Crate.STD,
+            Crate.CORE,
+            Crate.ALLOC,
+            Crate.PROC_MACRO,
+            Crate.TEST,
+        }:
             return title or None
 
         breadcrumbs = self._extract_breadcrumbs(soup)
@@ -153,6 +209,19 @@ class PageParser:
         file_path: Path,
         soup: BeautifulSoup,
     ) -> ItemType | None:
+        """
+        Detect item type metadata for parsed documents.
+
+        Args:
+            title: Resolved document title.
+            text: Parsed document text.
+            crate: Detected crate.
+            file_path: Source HTML file path.
+            soup: Parsed HTML document.
+
+        Returns:
+            `ItemType` for std rustdoc pages, otherwise `None`.
+        """
         if crate != Crate.STD:
             return None
 
@@ -174,7 +243,23 @@ class PageParser:
                     return item_type
         return ItemType.UNKNOWN
 
-    def _detect_rustdoc_item_type(self, title: str, file_path: Path, soup: BeautifulSoup) -> ItemType | None:
+    def _detect_rustdoc_item_type(
+        self,
+        title: str,
+        file_path: Path,
+        soup: BeautifulSoup,
+    ) -> ItemType | None:
+        """
+        Detect rustdoc item type using file naming and body class hints.
+
+        Args:
+            title: Resolved document title.
+            file_path: Source file path.
+            soup: Parsed HTML document.
+
+        Returns:
+            Inferred `ItemType`, or `None` when inference is inconclusive.
+        """
         stem = file_path.stem
         for prefix, item_type in self.RUSTDOC_FILE_PREFIX_TO_ITEM_TYPE.items():
             if stem.startswith(prefix):
@@ -202,6 +287,15 @@ class PageParser:
         return None
 
     def _resolve_rust_version(self, crate: Crate) -> str | None:
+        """
+        Resolve docs snapshot version for a crate with in-memory caching.
+
+        Args:
+            crate: Crate for version lookup.
+
+        Returns:
+            Version string or `None` when unavailable.
+        """
         if crate in self._rust_versions:
             return self._rust_versions[crate]
 
@@ -216,6 +310,12 @@ class PageParser:
         return version
 
     def _resolve_book_version(self) -> str | None:
+        """
+        Resolve Rust version from Rust Book landing page.
+
+        Returns:
+            Version string like `1.85.0`, or `None` if not found.
+        """
         index_path = self.raw_data_dir / Crate.BOOK.value / "index.html"
         if not index_path.exists():
             return None
@@ -226,14 +326,20 @@ class PageParser:
         return match.group(1) if match else None
 
     def _resolve_std_version(self) -> str | None:
+        """
+        Resolve rustdoc snapshot version from std crate index page.
+
+        Returns:
+            Version string like `1.91.1`, or `None` if not found.
+        """
         index_path = self.raw_data_dir / Crate.STD.value / "index.html"
         if not index_path.exists():
             return None
 
         soup = BeautifulSoup(index_path.read_text(encoding="utf-8", errors="replace"), "lxml")
-        vars_meta = soup.select_one('meta[name="rustdoc-vars"]')
-        if vars_meta:
-            channel = vars_meta.get("data-channel")
+        rustdoc_vars_meta = soup.select_one('meta[name="rustdoc-vars"]')
+        if rustdoc_vars_meta:
+            channel = rustdoc_vars_meta.get("data-channel")
             if channel:
                 return channel
 
@@ -245,6 +351,12 @@ class PageParser:
         return None
 
     def _resolve_cargo_version(self) -> str | None:
+        """
+        Resolve Cargo docs snapshot version from changelog page.
+
+        Returns:
+            Version string like `1.91`, or `None` if not found.
+        """
         changelog_path = self.raw_data_dir / Crate.CARGO.value / "CHANGELOG.html"
         if not changelog_path.exists():
             return None

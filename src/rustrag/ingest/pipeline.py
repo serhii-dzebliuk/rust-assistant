@@ -1,6 +1,4 @@
-"""
-Ingest pipeline orchestration.
-"""
+"""Top-level ingest pipeline orchestration."""
 
 from __future__ import annotations
 
@@ -11,7 +9,7 @@ from typing import Optional
 from .clean import clean_documents
 from .dedup import deduplicate_documents
 from .discover import discover_documents
-from .parse_html import parse_documents
+from .parse import parse
 
 logger = logging.getLogger(__name__)
 
@@ -21,17 +19,44 @@ def run_pipeline(
     raw_data_dir: Path | str = "data/raw",
     crates: Optional[list[str]] = None,
     limit: Optional[int] = None,
-    docs_output: Path | str = "data/processed/docs.jsonl",
-    clean_output: Path | str = "data/processed/docs_clean.jsonl",
-    dedup_output: Path | str = "data/processed/docs_dedup.jsonl",
+    parsing_output: Path | str = "data/processed/docs_parsed.jsonl",
+    clean_output: Path | str = "data/processed/docs_cleaned.jsonl",
+    dedup_output: Path | str = "data/processed/docs_deduped.jsonl",
 ):
+    """
+    Execute ingest pipeline stages with a single entry point.
+    Stage order: discover -> parse -> clean -> dedup
+
+    Args:
+        stage: Requested stage (`discover`, `parse`, `clean`, `dedup`, `all`).
+        raw_data_dir: Root directory with raw HTML sources.
+        crates: Optional crate filters.
+        limit: Optional cap on discovered files.
+        parsing_output: Output JSONL path for parsed documents.
+        clean_output: Output JSONL path for cleaned documents.
+        dedup_output: Output JSONL path for deduplicated documents.
+
+    Returns:
+        Stage result object:
+        - list[Path] for `discover`
+        - list[Document] for other stages
+
+    Example:
+        >>> docs = run_pipeline(stage="all", crates=["std"], limit=100)
+        >>> len(docs) > 0
+        True
+    """
     logger.info("Pipeline start: stage=%s", stage)
     discovered_files = discover_documents(raw_data_dir=raw_data_dir, crates=crates, limit=limit)
     logger.info("Discovery complete: %s files", len(discovered_files))
     if stage == "discover":
         return discovered_files
 
-    parsed_docs = parse_documents(html_files=discovered_files, raw_data_dir=raw_data_dir, output_file=docs_output)
+    parsed_docs = parse(
+        html_files=discovered_files,
+        raw_data_dir=raw_data_dir,
+        output_file=parsing_output,
+    )
     logger.info("Parse complete: %s docs", len(parsed_docs))
     if stage == "parse":
         return parsed_docs

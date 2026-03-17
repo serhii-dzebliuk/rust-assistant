@@ -13,7 +13,9 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ItemType(str, Enum):
-    """Type of Rust documentation item."""
+    """
+    Enum for normalized Rust documentation item kinds.
+    """
     FUNCTION = "fn"
     STRUCT = "struct"
     TRAIT = "trait"
@@ -24,12 +26,13 @@ class ItemType(str, Enum):
     ENUM = "enum"
     CONSTANT = "constant"
     TYPE_ALIAS = "type"
-    BOOK_SECTION = "book_section"
     UNKNOWN = "unknown"
 
 
 class Crate(str, Enum):
-    """Known Rust crates/documentation sources."""
+    """
+    Enum for supported documentation sources/crates.
+    """
     STD = "std"
     CORE = "core"
     ALLOC = "alloc"
@@ -43,6 +46,11 @@ class Crate(str, Enum):
 
 
 class SourceType(str, Enum):
+    """
+    High-level source layout used by adapter factory selection.
+    Multiple crates can map to the same `SourceType` (for example rustdoc).
+    """
+
     BOOK = "book"
     REFERENCE = "reference"
     CARGO = "cargo"
@@ -50,51 +58,64 @@ class SourceType(str, Enum):
 
 
 class DocumentMetadata(BaseModel):
-    """Metadata for a Rust documentation document."""
-    crate: Crate = Crate.UNKNOWN  # Top-level docs source, for example "book" or "std".
-    item_path: Optional[str] = None  # Canonical item/page path, for example "std::vec::Vec".
-    item_type: Optional[ItemType] = None  # Rust item kind when modeled, mainly for rustdoc pages.
-    rust_version: Optional[str] = None  # Docs snapshot version, for example "1.91.1".
-    url: Optional[str] = None  # Canonical online URL for the source document.
-    raw_html_path: Optional[str] = None  # Absolute path to the original local HTML file.
+    """
+    Metadata attached to parsed documentation page records.
 
-    # Additional fields for filtering/debugging
-    breadcrumbs: Optional[list[str]] = None  # Optional navigation trail extracted from the page.
+    Attributes:
+        crate: Top-level docs source, for example `book` or `std`.
+        item_path: Canonical page/item path, for example `std::vec::Vec`.
+        item_type: Optional Rust item kind, primarily set for rustdoc pages.
+        rust_version: Docs snapshot version, for example `1.91.1`.
+        url: Canonical online URL for the source document.
+        raw_html_path: Absolute local path to the original HTML source.
+        breadcrumbs: Optional navigation path extracted from page chrome.
+    """
+
+    crate: Crate = Crate.UNKNOWN
+    item_path: Optional[str] = None
+    item_type: Optional[ItemType] = None
+    rust_version: Optional[str] = None
+    url: Optional[str] = None
+    raw_html_path: Optional[str] = None
+    breadcrumbs: Optional[list[str]] = None
 
 
 class Document(BaseModel):
     """
-    Represents a parsed Rust documentation page.
-    Output of parsing stage (ingest/parse_html.py).
+    Parsed documentation page produced by ingest parsing stage.
+
+    Attributes:
+        doc_id: Stable document id generated from source path and title.
+        title: Extracted page title.
+        source_path: Relative path from `data/raw`.
+        text: Parsed and cleaned main content text.
+        metadata: Source and item metadata.
     """
+
     doc_id: str
     title: str
-    source_path: str  # relative path from data/raw/
-    text: str  # cleaned main content
+    source_path: str
+    text: str
     metadata: DocumentMetadata
 
     @staticmethod
     def generate_id(source_path: str, title: str) -> str:
-        """Generate unique document ID from source path and title."""
+        """
+        Generate a stable short document id.
+
+        Args:
+            source_path: Relative source path.
+            title: Extracted document title.
+
+        Returns:
+            Hex digest prefix used as document id.
+
+        Example:
+            >>> Document.generate_id("std/index.html", "std")
+            '...'
+        """
         content = f"{source_path}::{title}"
         return hashlib.sha256(content.encode()).hexdigest()[:16]
-
-    @field_validator('text')
-    @classmethod
-    def text_not_empty(cls, v: str) -> str:
-        """Ensure text is not empty."""
-        if not v or not v.strip():
-            raise ValueError("Document text cannot be empty")
-        return v
-
-    def to_jsonl(self) -> str:
-        """Serialize to JSONL format."""
-        return self.model_dump_json()
-
-    @classmethod
-    def from_jsonl(cls, line: str) -> Document:
-        """Deserialize from JSONL format."""
-        return cls.model_validate_json(line)
 
 
 class ChunkMetadata(BaseModel):

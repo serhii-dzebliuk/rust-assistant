@@ -1,12 +1,22 @@
+"""Adapter for Rust Reference pages."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-from rustrag.ingest.parsing.adapters.base_adapter import HtmlAdapter
+from .base_adapter import HtmlAdapter
+
 
 class ReferenceAdapter(HtmlAdapter):
+    """
+    HTML adapter tuned for Rust Reference content pages.
+
+    The adapter removes grammar and navigation artifacts specific to the
+    reference site layout.
+    """
+
     main_selectors = ("main", "main.content", "div#content")
     extra_remove_selectors = (
         "div.rule",
@@ -17,6 +27,16 @@ class ReferenceAdapter(HtmlAdapter):
     )
 
     def extract_title(self, soup: BeautifulSoup, file_path: Path) -> str:
+        """
+        Extract a stable title from reference pages.
+
+        Args:
+            soup: Parsed HTML document.
+            file_path: Source HTML file path.
+
+        Returns:
+            Title from `<title>`, then `<h1>`, then file stem.
+        """
         if soup.title:
             return soup.title.get_text(" ", strip=True)
         h1 = soup.select_one("main h1")
