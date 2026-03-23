@@ -7,7 +7,14 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup, Tag
 
-from ..core import COMMON_REMOVE_SELECTORS, extract_structured_text, remove_noise
+from rustrag.models import StructuredBlock
+
+from ..core import (
+    COMMON_REMOVE_SELECTORS,
+    blocks_to_text,
+    extract_structured_blocks,
+    remove_noise,
+)
 
 
 class HtmlAdapter(ABC):
@@ -69,14 +76,26 @@ class HtmlAdapter(ABC):
         """
         raise NotImplementedError
 
-    def extract_text(self, root: Tag) -> str:
+    def extract_blocks(self, root: Tag) -> list[StructuredBlock]:
         """
-        Convert cleaned HTML main content into normalized text blocks.
+        Extract structured content blocks from cleaned main content.
 
         Args:
             root: Cleaned main content tag.
 
         Returns:
+            Structured blocks preserving heading and block boundaries.
+        """
+        return extract_structured_blocks(root)
+
+    def extract_text(self, blocks: list[StructuredBlock]) -> str:
+        """
+        Convert structured content blocks into normalized text.
+
+        Args:
+            blocks: Structured blocks extracted from the HTML subtree.
+
+        Returns:
             Structured, normalized text extracted from the HTML subtree.
         """
-        return extract_structured_text(root)
+        return blocks_to_text(blocks)

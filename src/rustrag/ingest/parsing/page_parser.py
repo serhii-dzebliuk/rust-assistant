@@ -102,7 +102,8 @@ class PageParser:
                 return None
 
             cleaned_main = adapter.clean_main(main)
-            text = adapter.extract_text(cleaned_main)
+            structured_blocks = adapter.extract_blocks(cleaned_main)
+            text = adapter.extract_text(structured_blocks)
             if not text or not text.strip():
                 logger.warning("No extracted text in %s", file_path)
                 return None
@@ -128,6 +129,7 @@ class PageParser:
                 title=title,
                 source_path=source_path,
                 text=text,
+                structured_blocks=structured_blocks,
                 metadata=metadata,
             )
         except Exception as exc:

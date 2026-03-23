@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from rustrag.ingest.parsing.page_parser import PageParser
+from rustrag.models import BlockType
 
 
 def test_reference_destructors_keeps_code_comments_and_removes_rule_anchors():
@@ -51,6 +52,24 @@ def test_book_hello_cargo_uses_console_fences_and_preserves_inline_commands():
     assert "```console\n$ cargo run" in doc.text
     assert "We can create a project using `cargo new`." in doc.text
     assert "We can build and run a project in one step using `cargo run`." in doc.text
+
+
+def test_book_parse_preserves_structured_blocks_for_headings_and_code():
+    parser = PageParser(raw_data_dir=Path("data/raw"))
+    doc = parser.parse_file(Path("data/raw/book/ch01-03-hello-cargo.html"))
+
+    assert doc is not None
+    assert doc.structured_blocks
+    assert doc.structured_blocks[0].block_type == BlockType.HEADING
+    assert doc.structured_blocks[0].text == "Hello, Cargo!"
+
+    console_blocks = [
+        block
+        for block in doc.structured_blocks
+        if block.block_type == BlockType.CODE_BLOCK and block.code_language == "console"
+    ]
+    assert console_blocks
+    assert any("Building and Running a Cargo Project" in block.section_path for block in console_blocks)
 
 
 def test_book_metadata_uses_page_path_and_sets_url_and_version():
@@ -104,6 +123,31 @@ def test_rustdoc_uses_rust_fences_for_rustdoc_code_blocks():
     assert "pub struct Layout" in doc.text
 
 
+def test_rustdoc_parse_preserves_section_paths_and_anchors():
+    parser = PageParser(raw_data_dir=Path("data/raw"))
+    doc = parser.parse_file(Path("data/raw/std/vec/struct.Vec.html"))
+
+    assert doc is not None
+    example_heading = next(
+        (
+            block
+            for block in doc.structured_blocks
+            if block.block_type == BlockType.HEADING and block.text == "Examples"
+        ),
+        None,
+    )
+    assert example_heading is not None
+    assert example_heading.heading_level is not None
+    assert example_heading.anchor is not None
+
+    example_code_blocks = [
+        block
+        for block in doc.structured_blocks
+        if block.block_type == BlockType.CODE_BLOCK and "Examples" in block.section_path
+    ]
+    assert example_code_blocks
+
+
 def test_rustdoc_code_blocks_do_not_insert_spurious_line_breaks():
     parser = PageParser(raw_data_dir=Path("data/raw"))
     doc = parser.parse_file(Path("data/raw/std/alloc/trait.Allocator.html"))
@@ -148,3 +192,13 @@ def test_reference_metadata_uses_page_path_sets_url_and_keeps_version_null():
     assert doc.metadata.item_type is None
     assert doc.metadata.rust_version is None
     assert doc.metadata.url == "https://doc.rust-lang.org/reference/destructors.html"
+
+
+def test_reference_parse_preserves_structured_blocks():
+    parser = PageParser(raw_data_dir=Path("data/raw"))
+    doc = parser.parse_file(Path("data/raw/reference/types/tuple.html"))
+
+    assert doc is not None
+    assert doc.structured_blocks[0].block_type == BlockType.HEADING
+    assert doc.structured_blocks[0].text == "Tuple types"
+    assert any(block.block_type == BlockType.LIST_ITEM for block in doc.structured_blocks)

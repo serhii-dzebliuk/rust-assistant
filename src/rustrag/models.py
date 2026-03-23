@@ -57,6 +57,44 @@ class SourceType(str, Enum):
     RUSTDOC = "rustdoc"
 
 
+class BlockType(str, Enum):
+    """
+    Enum for normalized structured content blocks extracted from HTML.
+    """
+
+    HEADING = "heading"
+    PARAGRAPH = "paragraph"
+    LIST_ITEM = "list_item"
+    CODE_BLOCK = "code_block"
+    DEFINITION_TERM = "definition_term"
+    DEFINITION_DESC = "definition_desc"
+
+
+class StructuredBlock(BaseModel):
+    """
+    Structured representation of a parsed HTML content block.
+
+    Attributes:
+        block_type: Normalized block kind derived from HTML structure.
+        text: Extracted block text without surrounding document context.
+        html_tag: Original HTML tag name, for example `h2` or `pre`.
+        heading_level: Heading level for heading blocks (`1`-`6`).
+        list_depth: Nesting depth for list item blocks (`0` for top-level).
+        code_language: Optional fenced-code language label.
+        anchor: Closest stable anchor/id associated with the block.
+        section_path: Active heading path leading to this block.
+    """
+
+    block_type: BlockType
+    text: str
+    html_tag: str
+    heading_level: Optional[int] = None
+    list_depth: Optional[int] = None
+    code_language: Optional[str] = None
+    anchor: Optional[str] = None
+    section_path: list[str] = Field(default_factory=list)
+
+
 class DocumentMetadata(BaseModel):
     """
     Metadata attached to parsed documentation page records.
@@ -89,6 +127,7 @@ class Document(BaseModel):
         title: Extracted page title.
         source_path: Relative path from `data/raw`.
         text: Parsed and cleaned main content text.
+        structured_blocks: Structured block list preserved for chunking.
         metadata: Source and item metadata.
     """
 
@@ -96,6 +135,7 @@ class Document(BaseModel):
     title: str
     source_path: str
     text: str
+    structured_blocks: list[StructuredBlock] = Field(default_factory=list)
     metadata: DocumentMetadata
 
     @staticmethod
@@ -129,6 +169,7 @@ class ChunkMetadata(BaseModel):
 
     # Chunk-specific
     section: Optional[str] = None  # e.g., "Examples", "Panics", "Safety"
+    section_path: Optional[list[str]] = None  # Hierarchical heading path for the chunk.
     anchor: Optional[str] = None  # HTML anchor for direct linking
     chunk_index: int  # position in document (0-indexed)
     start_char: int  # start position in original document text

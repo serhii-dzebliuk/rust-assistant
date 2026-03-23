@@ -6,6 +6,8 @@ import re
 
 from bs4 import BeautifulSoup, Tag
 
+from rustrag.models import BlockType, StructuredBlock
+
 
 COMMON_REMOVE_SELECTORS = (
     "script",
@@ -104,6 +106,21 @@ def _extract_inline_text(node: Tag) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _normalize_heading_text(text: str) -> str:
+    """
+    Remove rustdoc-style heading adornments and normalize heading labels.
+
+    Args:
+        text: Raw extracted heading text.
+
+    Returns:
+        Clean heading text suitable for section metadata.
+    """
+    text = re.sub(r"^[§ｧ]+\s*", "", text)
+    text = re.sub(r"\s*[§ｧ]+$", "", text)
+    return text.strip()
+
+
 def _detect_code_language(pre: Tag) -> str:
     """
     Detect language label for a `<pre>` block.
@@ -153,22 +170,41 @@ def _extract_code_block_text(pre: Tag) -> str:
     return pre.get_text(strip=False).strip("\n")
 
 
-def extract_structured_text(root: Tag) -> str:
+def _extract_anchor(node: Tag) -> str | None:
     """
-    Convert cleaned HTML main content into normalized markdown-like text.
+    Extract a stable anchor identifier from a node or its closest container.
+
+    Args:
+        node: Parsed HTML node.
+
+    Returns:
+        Anchor id string when available, otherwise `None`.
+    """
+    for candidate in [node, *node.parents]:
+        if isinstance(candidate, Tag):
+            anchor = candidate.get("id")
+            if anchor:
+                return str(anchor)
+    return None
+
+
+def extract_structured_blocks(root: Tag) -> list[StructuredBlock]:
+    """
+    Convert cleaned HTML main content into structured blocks.
 
     Args:
         root: Main content element selected by a source adapter.
 
     Returns:
-        Structured plain text preserving headings, lists, and code blocks.
+        Structured blocks preserving headings, lists, and code blocks.
 
     Example:
-        >>> text = extract_structured_text(main_tag)
-        >>> text.startswith("Chapter 1")
+        >>> blocks = extract_structured_blocks(main_tag)
+        >>> blocks[0].block_type == BlockType.HEADING
         True
     """
-    blocks: list[str] = []
+    blocks: list[StructuredBlock] = []
+    section_stack: list[tuple[int, str, str | None]] = []
     tags = ("h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "pre", "dt", "dd")
     for element in root.find_all(tags):
         inside_pre = any(
@@ -192,7 +228,15 @@ def extract_structured_text(root: Tag) -> str:
         ):
             text = _extract_inline_text(element)
             if text:
-                blocks.append(f"  - {text}")
+                blocks.append(
+                    StructuredBlock(
+                        block_type=BlockType.DEFINITION_DESC,
+                        text=text,
+                        html_tag=element.name,
+                        anchor=_extract_anchor(element),
+                        section_path=[entry[1] for entry in section_stack],
+                    )
+                )
             continue
         if (
             element.name == "dt"
@@ -201,19 +245,49 @@ def extract_structured_text(root: Tag) -> str:
         ):
             text = _extract_inline_text(element)
             if text:
-                blocks.append(f"- {text}")
+                blocks.append(
+                    StructuredBlock(
+                        block_type=BlockType.DEFINITION_TERM,
+                        text=text,
+                        html_tag=element.name,
+                        anchor=_extract_anchor(element),
+                        section_path=[entry[1] for entry in section_stack],
+                    )
+                )
             continue
 
         if element.name.startswith("h"):
-            text = _extract_inline_text(element)
+            text = _normalize_heading_text(_extract_inline_text(element))
             if text:
-                blocks.append(text)
+                heading_level = int(element.name[1])
+                while section_stack and section_stack[-1][0] >= heading_level:
+                    section_stack.pop()
+                anchor = _extract_anchor(element)
+                section_stack.append((heading_level, text, anchor))
+                blocks.append(
+                    StructuredBlock(
+                        block_type=BlockType.HEADING,
+                        text=text,
+                        html_tag=element.name,
+                        heading_level=heading_level,
+                        anchor=anchor,
+                        section_path=[entry[1] for entry in section_stack],
+                    )
+                )
             continue
 
         if element.name == "p":
             text = _extract_inline_text(element)
             if text and text != "Show Railroad":
-                blocks.append(text)
+                blocks.append(
+                    StructuredBlock(
+                        block_type=BlockType.PARAGRAPH,
+                        text=text,
+                        html_tag=element.name,
+                        anchor=_extract_anchor(element) or _current_section_anchor(section_stack),
+                        section_path=[entry[1] for entry in section_stack],
+                    )
+                )
             continue
 
         if element.name == "li":
@@ -228,14 +302,94 @@ def extract_structured_text(root: Tag) -> str:
                 )
                 - 1
             )
-            prefix = "  " * max(depth, 0) + "- "
-            blocks.append(f"{prefix}{text}")
+            blocks.append(
+                StructuredBlock(
+                    block_type=BlockType.LIST_ITEM,
+                    text=text,
+                    html_tag=element.name,
+                    list_depth=max(depth, 0),
+                    anchor=_extract_anchor(element) or _current_section_anchor(section_stack),
+                    section_path=[entry[1] for entry in section_stack],
+                )
+            )
             continue
 
         if element.name == "pre":
             code = _extract_code_block_text(element)
             if code:
-                language = _detect_code_language(element)
-                blocks.append(f"```{language}\n{code}\n```")
+                blocks.append(
+                    StructuredBlock(
+                        block_type=BlockType.CODE_BLOCK,
+                        text=code,
+                        html_tag=element.name,
+                        code_language=_detect_code_language(element),
+                        anchor=_extract_anchor(element) or _current_section_anchor(section_stack),
+                        section_path=[entry[1] for entry in section_stack],
+                    )
+                )
 
-    return normalize_text("\n\n".join(blocks))
+    return blocks
+
+
+def _current_section_anchor(section_stack: list[tuple[int, str, str | None]]) -> str | None:
+    """
+    Return the closest heading anchor from the current section stack.
+
+    Args:
+        section_stack: Active heading stack.
+
+    Returns:
+        Anchor from the innermost current section or `None`.
+    """
+    for _, _, anchor in reversed(section_stack):
+        if anchor:
+            return anchor
+    return None
+
+
+def blocks_to_text(blocks: list[StructuredBlock]) -> str:
+    """
+    Render structured blocks into normalized markdown-like text.
+
+    Args:
+        blocks: Structured blocks extracted from the HTML tree.
+
+    Returns:
+        Plain text representation used by downstream pipeline stages.
+    """
+    rendered_blocks: list[str] = []
+    for block in blocks:
+        if block.block_type == BlockType.HEADING:
+            rendered_blocks.append(block.text)
+            continue
+        if block.block_type == BlockType.PARAGRAPH:
+            rendered_blocks.append(block.text)
+            continue
+        if block.block_type == BlockType.LIST_ITEM:
+            prefix = "  " * (block.list_depth or 0) + "- "
+            rendered_blocks.append(f"{prefix}{block.text}")
+            continue
+        if block.block_type == BlockType.CODE_BLOCK:
+            language = block.code_language or "text"
+            rendered_blocks.append(f"```{language}\n{block.text}\n```")
+            continue
+        if block.block_type == BlockType.DEFINITION_TERM:
+            rendered_blocks.append(f"- {block.text}")
+            continue
+        if block.block_type == BlockType.DEFINITION_DESC:
+            rendered_blocks.append(f"  - {block.text}")
+
+    return normalize_text("\n\n".join(rendered_blocks))
+
+
+def extract_structured_text(root: Tag) -> str:
+    """
+    Convert cleaned HTML main content into normalized markdown-like text.
+
+    Args:
+        root: Main content element selected by a source adapter.
+
+    Returns:
+        Structured plain text preserving headings, lists, and code blocks.
+    """
+    return blocks_to_text(extract_structured_blocks(root))

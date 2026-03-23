@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the RustRAG ingest pipeline")
     parser.add_argument(
         "--stage",
-        choices=["discover", "parse", "clean", "dedup", "all"],
+        choices=["discover", "parse", "clean", "dedup", "chunk", "chunk_dedup", "all"],
         default="all",
         help="Pipeline stage to run (default: all)",
     )
@@ -57,6 +57,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output path for deduplicated documents (default: data/processed/docs_deduped.jsonl)",
     )
     parser.add_argument(
+        "--chunk-output",
+        type=Path,
+        default="data/chunks/chunks.jsonl",
+        help="Output path for chunks (default: data/chunks/chunks.jsonl)",
+    )
+    parser.add_argument(
+        "--chunk-dedup-output",
+        type=Path,
+        default="data/chunks/chunks_deduped.jsonl",
+        help="Output path for deduplicated chunks (default: data/chunks/chunks_deduped.jsonl)",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -88,6 +100,8 @@ def main() -> int:
         parsing_output=args.parse_output,
         clean_output=args.clean_output,
         dedup_output=args.dedup_output,
+        chunk_output=args.chunk_output,
+        chunk_dedup_output=args.chunk_dedup_output,
     )
 
     if args.stage == "discover":
@@ -99,11 +113,31 @@ def main() -> int:
         print(f"Cleaned documents: {len(result)}")
         print(f"Saved parsed docs to: {args.parse_output}")
         print(f"Saved cleaned docs to: {args.clean_output}")
-    else:
+    elif args.stage == "dedup":
         print(f"Deduplicated documents: {len(result)}")
         print(f"Saved parsed docs to: {args.parse_output}")
         print(f"Saved cleaned docs to: {args.clean_output}")
         print(f"Saved deduplicated docs to: {args.dedup_output}")
+    elif args.stage == "chunk":
+        print(f"Generated chunks: {len(result)}")
+        print(f"Saved parsed docs to: {args.parse_output}")
+        print(f"Saved cleaned docs to: {args.clean_output}")
+        print(f"Saved deduplicated docs to: {args.dedup_output}")
+        print(f"Saved chunks to: {args.chunk_output}")
+    elif args.stage == "chunk_dedup":
+        print(f"Deduplicated chunks: {len(result)}")
+        print(f"Saved parsed docs to: {args.parse_output}")
+        print(f"Saved cleaned docs to: {args.clean_output}")
+        print(f"Saved deduplicated docs to: {args.dedup_output}")
+        print(f"Saved chunks to: {args.chunk_output}")
+        print(f"Saved deduplicated chunks to: {args.chunk_dedup_output}")
+    else:
+        print(f"Deduplicated chunks: {len(result)}")
+        print(f"Saved parsed docs to: {args.parse_output}")
+        print(f"Saved cleaned docs to: {args.clean_output}")
+        print(f"Saved deduplicated docs to: {args.dedup_output}")
+        print(f"Saved chunks to: {args.chunk_output}")
+        print(f"Saved deduplicated chunks to: {args.chunk_dedup_output}")
 
     return 0
 

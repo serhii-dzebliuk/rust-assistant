@@ -10,7 +10,8 @@ import logging
 import re
 from pathlib import Path
 
-from ..models import Crate, Document
+from .parsing.core import blocks_to_text
+from ..models import BlockType, Crate, Document, StructuredBlock
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class DocumentCleaner:
     - remove known textual artifacts
     - apply source-specific cleanup rules
     - drop extremely short low-value documents
+    - preserve structured blocks for downstream chunking
     """
 
     MIN_TEXT_LENGTH = 30
@@ -47,16 +49,58 @@ class DocumentCleaner:
         text = text.replace("\r\n", "\n").replace("\r", "\n")
         text = re.sub(r"[ \t]+\n", "\n", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
-        text = text.replace("Â§ ", "")
-        text = text.replace("§ ", "")
+        for marker in ("Ã‚Â§ ", "Â§ ", "§ ", "ｧ "):
+            text = text.replace(marker, "")
 
         if crate == Crate.REFERENCE:
             text = re.sub(r"(?m)^\[[a-z0-9_.-]+\]\s*$\n?", "", text)
 
         text = re.sub(r"\b([A-Za-z0-9]+)_\s+([A-Za-z0-9]+)\b", r"\1_\2", text)
         text = re.sub(r"`([^`\n]+)`\s+s\b", r"`\1`s", text)
+        text = re.sub(r" +([,.;:!?])", r"\1", text)
 
         return text.strip()
+
+    def clean_code_text(self, text: str) -> str:
+        """
+        Normalize code block text without collapsing code formatting.
+
+        Args:
+            text: Raw code block text.
+
+        Returns:
+            Cleaned code text preserving line structure.
+        """
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        for marker in ("Ã‚Â§ ", "Â§ ", "§ ", "ｧ "):
+            text = text.replace(marker, "")
+        return text.strip("\n")
+
+    def clean_blocks(
+        self,
+        blocks: list[StructuredBlock],
+        crate: Crate,
+    ) -> list[StructuredBlock]:
+        """
+        Normalize structured block text while preserving block boundaries.
+
+        Args:
+            blocks: Structured blocks extracted during parse stage.
+            crate: Crate used for source-specific cleanup rules.
+
+        Returns:
+            Cleaned structured blocks with empty blocks removed.
+        """
+        cleaned_blocks: list[StructuredBlock] = []
+        for block in blocks:
+            if block.block_type == BlockType.CODE_BLOCK:
+                cleaned_text = self.clean_code_text(block.text)
+            else:
+                cleaned_text = self.clean_text(block.text, crate)
+            if not cleaned_text:
+                continue
+            cleaned_blocks.append(block.model_copy(update={"text": cleaned_text}))
+        return cleaned_blocks
 
     def clean_document(self, doc: Document) -> Document | None:
         """
@@ -68,10 +112,19 @@ class DocumentCleaner:
         Returns:
             Cleaned `Document` or `None` if document is below length threshold.
         """
-        cleaned_text = self.clean_text(doc.text, doc.metadata.crate)
+        cleaned_blocks = self.clean_blocks(doc.structured_blocks, doc.metadata.crate)
+        if cleaned_blocks:
+            cleaned_text = blocks_to_text(cleaned_blocks)
+        else:
+            cleaned_text = self.clean_text(doc.text, doc.metadata.crate)
         if len(cleaned_text) < self.MIN_TEXT_LENGTH:
             return None
-        return doc.model_copy(update={"text": cleaned_text})
+        return doc.model_copy(
+            update={
+                "text": cleaned_text,
+                "structured_blocks": cleaned_blocks,
+            }
+        )
 
 
 def clean_documents(
