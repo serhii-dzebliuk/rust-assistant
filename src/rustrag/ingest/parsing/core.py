@@ -6,7 +6,7 @@ import re
 
 from bs4 import BeautifulSoup, Tag
 
-from rustrag.models import BlockType, StructuredBlock
+from rustrag.core.models import BlockType, StructuredBlock
 
 
 COMMON_REMOVE_SELECTORS = (

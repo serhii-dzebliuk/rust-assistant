@@ -1,0 +1,185 @@
+# Repo guidelines
+
+## Project Structure & Module Organization
+- Use an `app/` package as the main backend source root.
+- Keep `app/main.py` minimal and limited to FastAPI app creation, router registration, middleware, exception handlers, and startup/shutdown wiring.
+- Organize the backend by responsibility, not by technical accident.
+- Recommended structure:
+  - `app/api/` — FastAPI routers, request/response schemas, dependencies, HTTP error mapping
+  - `app/services/` — application and domain logic
+  - `app/retrieval/` — retrieval flow, ranking, context assembly, Qdrant-facing retrieval orchestration
+  - `app/ingest/` — document loading, parsing, chunking, metadata extraction, embedding pipeline
+  - `app/clients/` — external integrations such as LLM clients, embedding clients, and other provider adapters
+  - `app/repositories/` — Postgres persistence logic for chunks, documents, metadata, and ingestion state
+  - `app/models/` — ORM/database models
+  - `app/schemas/` — shared Pydantic schemas and DTOs
+  - `app/core/` — settings, logging, security, dependency wiring, shared app configuration
+  - `app/utils/` — small generic helpers only; do not place core business logic here
+- Keep retrieval concerns separate from persistence concerns:
+  - Qdrant is the vector retrieval store
+  - Postgres is the source of truth for chunk text, document metadata, and ingest bookkeeping
+- Keep LangChain orchestration out of routers; place it in dedicated service/retrieval modules.
+- Keep external provider code behind dedicated client/adaptor modules so orchestration logic is not coupled to one provider SDK.
+- Routers should call services; they must not directly contain retrieval pipelines, database logic, or provider-specific code.
+- Keep database access out of routers and out of generic utility modules.
+- Keep Docker-related deployment files outside `app/`, for example:
+  - `compose.yaml`
+  - `docker/` for Dockerfiles and container-related assets
+  - `.env` / `.env.example` for environment configuration
+- Keep operational scripts in `scripts/`, for example ingest runners, maintenance scripts, backup helpers, and local admin utilities.
+- Keep tests under `tests/` and mirror the application structure where practical.
+- Recommended test layout:
+  - `tests/unit/`
+  - `tests/integration/`
+  - `tests/unit/services/`
+  - `tests/unit/retrieval/`
+  - `tests/unit/ingest/`
+  - `tests/integration/api/`
+  - `tests/integration/db/`
+  - `tests/integration/qdrant/`
+  - `tests/conftest.py`
+- Keep notebooks in `notebooks/` for exploratory work only; do not place production logic there.
+- Treat logs, caches, uploaded files, snapshots, and other runtime-generated data as non-versioned artifacts.
+- Prefer small, focused modules and split files when they start mixing API, orchestration, retrieval, and persistence concerns.
+
+## Infrastructure & Deployment Conventions
+- Use Docker Compose as the default deployment model for local development and the self-hosted Ubuntu server.
+- Run each major component as a separate service:
+  - `proxy` for Caddy
+  - `backend` for the FastAPI app
+  - `postgres` for relational data
+  - `qdrant` for vector storage and retrieval
+- Use Caddy as the public entrypoint and reverse proxy for the backend.
+- Expose public HTTP/HTTPS traffic only through Caddy unless a service explicitly requires direct access.
+- Keep the backend, Postgres, and Qdrant on internal Docker networks where possible.
+- Keep the backend stateless; persistent state must live in Postgres and Qdrant volumes.
+- Use Postgres for chunk text, document metadata, ingest bookkeeping, and relational application data.
+- Use Qdrant only for vector storage and retrieval.
+- Use service names for internal container-to-container communication.
+- Do not hardcode hostnames, ports, credentials, file paths, or secrets in application code.
+- Read all runtime configuration from environment variables.
+- Use persistent Docker volumes for:
+  - Postgres data
+  - Qdrant data
+  - Caddy data/config when required for certificates and proxy state
+- Do not store important data inside ephemeral container filesystems.
+- Add healthchecks for backend, Postgres, and Qdrant where practical.
+- Do not assume a service is ready just because the container started.
+- Do not rely on `depends_on` alone as proof of readiness.
+- Keep backend logs on stdout/stderr and let Docker handle log collection.
+- Keep Caddy configuration in a dedicated `Caddyfile`.
+- Keep deployment-related files in predictable locations, for example:
+  - `compose.yaml`
+  - `docker/`
+  - `Caddyfile`
+  - `scripts/`
+- Use a dedicated backend Dockerfile and keep the image small and production-oriented.
+- Pin infrastructure image versions intentionally when stability matters.
+- Put backup, restore, migration, and maintenance helpers in `scripts/`.
+- Prefer explicit and documented network, port, volume, and environment definitions.
+- Document required ports, domains, volumes, and environment variables in the repository README or ops documentation.
+
+## Configuration & Environment Variables
+- Keep all runtime configuration in environment variables.
+- Load settings through a centralized config module.
+- Do not hardcode secrets, credentials, ports, hostnames, model names, or environment-specific values in code.
+- Validate required settings at startup and fail fast on missing or invalid critical configuration.
+- Keep a committed `.env.example` file with all required variables and safe placeholder values.
+- Never commit real `.env` files, secrets, tokens, passwords, or private keys.
+- Group settings by responsibility: app, Postgres, Qdrant, LLM/embeddings, logging, and proxy/public settings.
+- Use clear uppercase variable names with underscores.
+- Use settings objects instead of scattered direct environment reads across the codebase.
+
+## Code Style & Naming Conventions
+- Follow PEP 8 for general Python style and naming.
+- Use `black` for code formatting.
+- Use `isort` for import ordering.
+- Use `ruff` as the primary linter and style enforcement tool.
+- Keep code compatible with Pylance type checking and diagnostics.
+- Prefer project tool configuration over manual style guesses.
+- Use clear, descriptive names; prefer readability over short or clever names.
+- Use `snake_case` for variables, functions, and module names.
+- Use `PascalCase` for classes.
+- Use `UPPER_CASE` for constants.
+- Keep functions small and focused on one responsibility.
+- Prefer explicit code over hidden magic or overly compact expressions.
+- Add type hints for function arguments, return values, and important variables where helpful.
+- Write short, useful docstrings for public modules, classes, and functions.
+- Function docstrings should describe:
+  - what the function does
+  - important parameters
+  - return value
+  - raised exceptions when relevant
+- Add examples in docstrings only when they improve clarity.
+- Do not add docstrings for trivial private helpers unless they provide real value.
+- Keep comments minimal and meaningful; explain why, not what, when possible.
+- Use English for identifiers, comments, and docstrings.
+- Prefer absolute imports within the app unless local relative imports are clearly better.
+- Avoid unused imports, dead code, and commented-out code blocks.
+- Follow existing project naming and structure patterns before introducing new ones.
+- Do not add `# noqa`, `# type: ignore`, or other suppressions unless strictly necessary and briefly justified.
+
+## Logging
+- Use Python `logging` as the default logging system for the whole project.
+- Do not use `print()` for application logs.
+- Create and use module-level loggers via `logging.getLogger(__name__)`.
+- Keep logging setup centralized in one place, for example `app/core/logging.py`.
+- Configure logging once at application startup.
+- Use consistent log levels:
+  - `DEBUG` for detailed developer diagnostics
+  - `INFO` for normal app lifecycle events
+  - `WARNING` for recoverable problems or degraded behavior
+  - `ERROR` for failed operations
+  - `CRITICAL` for severe failures affecting app availability
+- Prefer structured, consistent log messages with stable fields and clear context.
+- Include useful context in logs where relevant, for example:
+  - request id / correlation id
+  - endpoint or operation name
+  - document/file id
+  - external provider name
+  - exception type
+- Never log secrets or sensitive data, including:
+  - API keys
+  - tokens
+  - passwords
+  - full request bodies with private data
+  - raw authorization headers
+- Log exceptions with stack traces using `logger.exception(...)` when handling unexpected errors.
+- Do not swallow exceptions silently; log meaningful failures before returning or re-raising.
+- Keep messages concise and actionable; avoid noisy or repetitive logs inside tight loops.
+- Use `INFO` logs for major business events and startup/shutdown milestones.
+- Use `DEBUG` logs for intermediate values only when they help debugging and are safe to expose in logs.
+- For FastAPI requests, log request start/end and important failures, but avoid excessive per-request noise.
+- Prefer JSON/structured logging in production if supported by the deployment environment.
+- Logging format, handlers, and levels should be environment-driven, for example:
+  - local dev: human-readable text logs with `DEBUG`
+  - production: structured logs with `INFO`
+- Third-party library log levels should be tuned to reduce noise.
+
+## Testing
+- Use `pytest` for all tests.
+- Use FastAPI `TestClient` for API integration tests.
+- Use `unittest.mock` (`patch`, `Mock`, `MagicMock`, `AsyncMock`) to isolate external dependencies such as LLM calls, network I/O, filesystem I/O, and third-party services.
+- Store pytest config in `pyproject.toml` under `[tool.pytest.ini_options]`.
+- Register custom pytest markers in `pyproject.toml` under `[tool.pytest.ini_options]`.
+- Keep all tests under `tests/`.
+- Organize tests by type and layer, for example:
+  - `tests/unit/services/`
+  - `tests/unit/utils/`
+  - `tests/integration/api/`
+  - `tests/integration/db/`
+- Use `tests/conftest.py` for shared fixtures.
+- Name files `test_*.py`, functions `test_*`, classes `Test*`.
+- Prefer one test module per source module when practical.
+- Unit tests must be isolated and must not perform real network, LLM, filesystem, or database calls.
+- Integration tests should verify real interaction between app components; mock only true external boundaries.
+- For API tests, assert status code and response body, and cover both happy path and failure path.
+- Cover success cases, invalid input, edge cases, and expected dependency failures.
+- Use `pytest.mark.parametrize` for repeated behavior across multiple inputs.
+- Keep fixtures small and explicit; default fixture scope should be `function`.
+- Avoid shared mutable state between tests.
+- Keep tests deterministic, independent, and easy to read.
+- Prefer Arrange / Act / Assert structure.
+- Add or update tests in every change that affects behavior.
+- Add regression tests for bug fixes.
+- Mark regression tests with `@pytest.mark.regression` when it is useful to run them separately.

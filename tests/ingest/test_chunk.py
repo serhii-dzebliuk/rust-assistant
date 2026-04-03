@@ -1,7 +1,7 @@
 from rustrag.ingest.chunk import DocumentChunker, chunk_documents
 from rustrag.ingest.chunk_dedup import deduplicate_chunks
 from rustrag.ingest.parsing.core import blocks_to_text
-from rustrag.models import (
+from rustrag.core.models import (
     BlockType,
     Crate,
     Document,

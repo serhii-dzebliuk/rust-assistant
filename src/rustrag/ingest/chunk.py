@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .parsing.core import blocks_to_text
-from ..models import BlockType, Chunk, ChunkMetadata, Crate, Document, StructuredBlock
+from ..core.models import BlockType, Chunk, ChunkMetadata, Crate, Document, StructuredBlock
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 """Factory for source-specific HTML adapters."""
 
-from rustrag.models import SourceType
+from rustrag.core.models import SourceType
 
 from .base_adapter import HtmlAdapter
 from .book_adapter import BookAdapter

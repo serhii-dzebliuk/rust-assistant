@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from rustrag.models import Crate, SourceType
+from rustrag.core.models import Crate, SourceType
 
 
 def map_to_source_type(crate: Crate) -> SourceType:

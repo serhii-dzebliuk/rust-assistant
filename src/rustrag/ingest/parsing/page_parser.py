@@ -7,7 +7,7 @@ from typing import Optional
 
 from bs4 import BeautifulSoup
 
-from rustrag.models import Crate, Document, DocumentMetadata, ItemType
+from rustrag.core.models import Crate, Document, DocumentMetadata, ItemType
 
 from .adapters.factory import get_adapter
 from .utils import (

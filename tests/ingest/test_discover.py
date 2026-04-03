@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from rustrag.ingest.discover import DocumentDiscoverer
-from rustrag.models import Crate
+from rustrag.core.models import Crate
 
 
 def test_discover_skips_rustdoc_redirect_files(tmp_path: Path):

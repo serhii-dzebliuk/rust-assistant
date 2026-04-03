@@ -7,7 +7,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup, Tag
 
-from rustrag.models import StructuredBlock
+from rustrag.core.models import StructuredBlock
 
 from ..core import (
     COMMON_REMOVE_SELECTORS,

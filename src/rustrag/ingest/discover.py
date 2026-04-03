@@ -12,7 +12,7 @@ from typing import Iterable, Optional
 
 from bs4 import BeautifulSoup, Tag
 
-from ..models import Crate
+from ..core.models import Crate
 
 logger = logging.getLogger(__name__)
 

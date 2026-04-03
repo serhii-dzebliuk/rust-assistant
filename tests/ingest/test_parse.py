@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from rustrag.ingest.parsing.page_parser import PageParser
-from rustrag.models import BlockType
+from rustrag.core.models import BlockType
 
 
 def test_reference_destructors_keeps_code_comments_and_removes_rule_anchors():

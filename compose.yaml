@@ -1,0 +1,86 @@
+﻿name: rust-assistant
+
+services:
+  proxy:
+    image: caddy:2.11.2
+    container_name: rust-assistant-proxy
+    networks:
+      - public
+      - app
+    restart: unless-stopped
+    environment:
+      BACKEND_PORT: ${BACKEND_PORT}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/rust-assistant/data/caddy:/data
+      - /opt/rust-assistant/config/caddy:/config
+
+# todo
+  backend:
+    image: ghcr.io/serhii-dzebliuk/rust-assistant-backend:latest
+    container_name: rust-assistant-backend
+    networks:
+      - app
+      - db
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      QDRANT_URL: http://qdrant:6333
+      HOST: 0.0.0.0
+      PORT: ${BACKEND_PORT}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/api/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+      qdrant:
+        condition: service_healthy
+        restart: true
+
+  postgres:
+    image: postgres:18
+    container_name: rust-assistant-postgres
+    volumes:
+      - /opt/rust-assistant/data/postgres:/var/lib/postgresql/data
+    networks:
+      - db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  qdrant:
+    image: qdrant/qdrant:v1.17
+    container_name: rust-assistant-qdrant
+    volumes:
+      - /opt/rust-assistant/data/qdrant:/qdrant/storage
+    networks:
+      - db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  public:
+  app:
+  db:
+    internal: true

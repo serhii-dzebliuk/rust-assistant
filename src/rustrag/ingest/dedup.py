@@ -12,7 +12,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from ..models import Document
+from ..core.models import Document
 
 logger = logging.getLogger(__name__)
 

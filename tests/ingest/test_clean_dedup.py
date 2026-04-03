@@ -1,6 +1,6 @@
 from rustrag.ingest.clean import clean_documents
 from rustrag.ingest.dedup import deduplicate_documents
-from rustrag.models import BlockType, Crate, Document, DocumentMetadata, StructuredBlock
+from rustrag.core.models import BlockType, Crate, Document, DocumentMetadata, StructuredBlock
 
 
 def _make_doc(source_path: str, text: str, crate: Crate = Crate.STD) -> Document:

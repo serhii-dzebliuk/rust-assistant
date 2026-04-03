@@ -1,4 +1,4 @@
-"""
+﻿"""
 Data models for RustRAG pipeline.
 Defines contracts for Documents, Chunks, and Search Results.
 """

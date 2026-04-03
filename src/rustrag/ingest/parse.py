@@ -12,7 +12,7 @@ from typing import Optional
 
 from rustrag.ingest.parsing.page_parser import PageParser
 
-from ..models import Document
+from ..core.models import Document
 
 logger = logging.getLogger(__name__)
 

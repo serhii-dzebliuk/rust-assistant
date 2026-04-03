@@ -1,0 +1,22 @@
+rust-assistant.api.mobik.space {
+
+    encode gzip zstd
+
+    reverse_proxy backend:{$BACKEND_PORT} {
+        health_uri /health
+        health_interval 10s
+        health_timeout 3s
+    }
+
+    header {
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer-when-downgrade"
+    }
+
+    log {
+        output stdout
+        format console
+    }
+
+}

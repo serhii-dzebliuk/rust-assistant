@@ -11,7 +11,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from ..models import Chunk
+from ..core.models import Chunk
 
 logger = logging.getLogger(__name__)
 

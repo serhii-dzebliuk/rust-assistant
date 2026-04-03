@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from .parsing.core import blocks_to_text
-from ..models import BlockType, Crate, Document, StructuredBlock
+from ..core.models import BlockType, Crate, Document, StructuredBlock
 
 logger = logging.getLogger(__name__)
 
