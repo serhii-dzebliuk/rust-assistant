@@ -1,20 +1,23 @@
 # Repo guidelines
 
+## General
+- Refer to `docs/architecture.md` for current system architecture and component responsibilities before making structural changes.
+
 ## Project Structure & Module Organization
-- Use an `app/` package as the main backend source root.
-- Keep `app/main.py` minimal and limited to FastAPI app creation, router registration, middleware, exception handlers, and startup/shutdown wiring.
+- Use an `src/rust-assistant/` package as the main backend source root.
+- Keep `rust-assistant/main.py` minimal and limited to FastAPI app creation, router registration, middleware, exception handlers, and startup/shutdown wiring.
 - Organize the backend by responsibility, not by technical accident.
 - Recommended structure:
-  - `app/api/` — FastAPI routers, request/response schemas, dependencies, HTTP error mapping
-  - `app/services/` — application and domain logic
-  - `app/retrieval/` — retrieval flow, ranking, context assembly, Qdrant-facing retrieval orchestration
-  - `app/ingest/` — document loading, parsing, chunking, metadata extraction, embedding pipeline
-  - `app/clients/` — external integrations such as LLM clients, embedding clients, and other provider adapters
-  - `app/repositories/` — Postgres persistence logic for chunks, documents, metadata, and ingestion state
-  - `app/models/` — ORM/database models
-  - `app/schemas/` — shared Pydantic schemas and DTOs
-  - `app/core/` — settings, logging, security, dependency wiring, shared app configuration
-  - `app/utils/` — small generic helpers only; do not place core business logic here
+  - `rust-assistant/api/` — FastAPI routers, request/response schemas, dependencies, HTTP error mapping
+  - `rust-assistant/services/` — application and domain logic
+  - `rust-assistant/retrieval/` — retrieval flow, ranking, context assembly, Qdrant-facing retrieval orchestration
+  - `rust-assistant/ingest/` — document loading, parsing, chunking, metadata extraction, embedding pipeline
+  - `rust-assistant/clients/` — external integrations such as LLM clients, embedding clients, and other provider adapters
+  - `rust-assistant/repositories/` — Postgres persistence logic for chunks, documents, metadata, and ingestion state
+  - `rust-assistant/models/` — ORM/database models(DB layer)
+  - `rust-assistant/schemas/` — shared Pydantic schemas and DTOs(API layer)
+  - `rust-assistant/core/` — settings, logging, security, dependency wiring, shared app configuration
+  - `rust-assistant/utils/` — small generic helpers only; do not place core business logic here
 - Keep retrieval concerns separate from persistence concerns:
   - Qdrant is the vector retrieval store
   - Postgres is the source of truth for chunk text, document metadata, and ingest bookkeeping
@@ -22,7 +25,7 @@
 - Keep external provider code behind dedicated client/adaptor modules so orchestration logic is not coupled to one provider SDK.
 - Routers should call services; they must not directly contain retrieval pipelines, database logic, or provider-specific code.
 - Keep database access out of routers and out of generic utility modules.
-- Keep Docker-related deployment files outside `app/`, for example:
+- Keep Docker-related deployment files outside `rust-assistant/`, for example:
   - `compose.yaml`
   - `docker/` for Dockerfiles and container-related assets
   - `.env` / `.env.example` for environment configuration
