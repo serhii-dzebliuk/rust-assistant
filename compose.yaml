@@ -23,10 +23,7 @@ services:
       - app
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: rust-assistant-backend:local
+    image: ghcr.io/serhii-dzebliuk/rust-assistant:latest
     container_name: rust-assistant-backend
     restart: unless-stopped
     depends_on:
@@ -108,6 +105,4 @@ volumes:
   caddy_data:
   postgres_data:
   qdrant_data:
-
-
 
