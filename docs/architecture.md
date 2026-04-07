@@ -121,7 +121,7 @@ This flow ensures the LLM answer is grounded in retrieved documentation rather t
 Recommended backend structure:
 
 ```text
-rust-assistant/
+src/rust_assistant/
   main.py
   api/
   services/
@@ -137,17 +137,17 @@ rust-assistant/
 
 Responsibilities:
 
-- `rust-assistant/main.py` — app creation and startup wiring
-- `rust-assistant/api/` — routers, HTTP dependencies, request/response handling
-- `rust-assistant/services/` — application and domain logic
-- `rust-assistant/retrieval/` — retrieval flow, ranking, context assembly
-- `rust-assistant/ingest/` — parsing, chunking, embedding, pipeline steps
-- `rust-assistant/clients/` — external integrations such as LLM and embedding providers
-- `rust-assistant/repositories/` — PostgreSQL persistence access
-- `rust-assistant/models/` — database models
-- `rust-assistant/schemas/` — shared Pydantic schemas and DTOs
-- `rust-assistant/core/` — config, logging, shared wiring
-- `rust-assistant/utils/` — small generic helpers only
+- `src/rust_assistant/main.py` — app creation and startup wiring
+- `src/rust_assistant/api/` — routers, HTTP dependencies, request/response handling
+- `src/rust_assistant/services/` — application and domain logic
+- `src/rust_assistant/retrieval/` — retrieval flow, ranking, context assembly
+- `src/rust_assistant/ingest/` — parsing, chunking, embedding, pipeline steps
+- `src/rust_assistant/clients/` — external integrations such as LLM and embedding providers
+- `src/rust_assistant/repositories/` — PostgreSQL persistence access
+- `src/rust_assistant/models/` — database models
+- `src/rust_assistant/schemas/` — shared Pydantic schemas and DTOs
+- `src/rust_assistant/core/` — config, logging, shared wiring
+- `src/rust_assistant/utils/` — small generic helpers only
 
 ## Architectural rules
 

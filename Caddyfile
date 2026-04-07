@@ -1,9 +1,8 @@
-rust-assistant.api.mobik.space {
-
+{$PUBLIC_BASE_URL} {
     encode gzip zstd
 
-    reverse_proxy backend:{$BACKEND_PORT} {
-        health_uri /health
+    reverse_proxy backend:{$PORT} {
+        health_uri /ready
         health_interval 10s
         health_timeout 3s
     }
@@ -18,5 +17,5 @@ rust-assistant.api.mobik.space {
         output stdout
         format console
     }
-
 }
+

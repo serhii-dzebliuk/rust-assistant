@@ -4,20 +4,20 @@
 - Refer to `docs/architecture.md` for current system architecture and component responsibilities before making structural changes.
 
 ## Project Structure & Module Organization
-- Use an `src/rust-assistant/` package as the main backend source root.
-- Keep `rust-assistant/main.py` minimal and limited to FastAPI app creation, router registration, middleware, exception handlers, and startup/shutdown wiring.
+- Use `src/rust_assistant/` as the main Python package for the `rust-assistant` backend.
+- Keep `src/rust_assistant/main.py` minimal and limited to FastAPI app creation, router registration, middleware, exception handlers, and startup/shutdown wiring.
 - Organize the backend by responsibility, not by technical accident.
 - Recommended structure:
-  - `rust-assistant/api/` — FastAPI routers, request/response schemas, dependencies, HTTP error mapping
-  - `rust-assistant/services/` — application and domain logic
-  - `rust-assistant/retrieval/` — retrieval flow, ranking, context assembly, Qdrant-facing retrieval orchestration
-  - `rust-assistant/ingest/` — document loading, parsing, chunking, metadata extraction, embedding pipeline
-  - `rust-assistant/clients/` — external integrations such as LLM clients, embedding clients, and other provider adapters
-  - `rust-assistant/repositories/` — Postgres persistence logic for chunks, documents, metadata, and ingestion state
-  - `rust-assistant/models/` — ORM/database models(DB layer)
-  - `rust-assistant/schemas/` — shared Pydantic schemas and DTOs(API layer)
-  - `rust-assistant/core/` — settings, logging, security, dependency wiring, shared app configuration
-  - `rust-assistant/utils/` — small generic helpers only; do not place core business logic here
+  - `src/rust_assistant/api/` — FastAPI routers, request/response schemas, dependencies, HTTP error mapping
+  - `src/rust_assistant/services/` — application and domain logic
+  - `src/rust_assistant/retrieval/` — retrieval flow, ranking, context assembly, Qdrant-facing retrieval orchestration
+  - `src/rust_assistant/ingest/` — document loading, parsing, chunking, metadata extraction, embedding pipeline
+  - `src/rust_assistant/clients/` — external integrations such as LLM clients, embedding clients, and other provider adapters
+  - `src/rust_assistant/repositories/` — Postgres persistence logic for chunks, documents, metadata, and ingestion state
+  - `src/rust_assistant/models/` — ORM/database models(DB layer)
+  - `src/rust_assistant/schemas/` — shared Pydantic schemas and DTOs(API layer)
+  - `src/rust_assistant/core/` — settings, logging, security, dependency wiring, shared app configuration
+  - `src/rust_assistant/utils/` — small generic helpers only; do not place core business logic here
 - Keep retrieval concerns separate from persistence concerns:
   - Qdrant is the vector retrieval store
   - Postgres is the source of truth for chunk text, document metadata, and ingest bookkeeping
@@ -25,7 +25,7 @@
 - Keep external provider code behind dedicated client/adaptor modules so orchestration logic is not coupled to one provider SDK.
 - Routers should call services; they must not directly contain retrieval pipelines, database logic, or provider-specific code.
 - Keep database access out of routers and out of generic utility modules.
-- Keep Docker-related deployment files outside `rust-assistant/`, for example:
+- Keep Docker-related deployment files outside `src/rust_assistant/`, for example:
   - `compose.yaml`
   - `docker/` for Dockerfiles and container-related assets
   - `.env` / `.env.example` for environment configuration
@@ -126,7 +126,7 @@
 - Use Python `logging` as the default logging system for the whole project.
 - Do not use `print()` for application logs.
 - Create and use module-level loggers via `logging.getLogger(__name__)`.
-- Keep logging setup centralized in one place, for example `app/core/logging.py`.
+- Keep logging setup centralized in one place, for example `src/rust_assistant/core/logging.py`.
 - Configure logging once at application startup.
 - Use consistent log levels:
   - `DEBUG` for detailed developer diagnostics

@@ -52,7 +52,7 @@ For the full system design, see [`docs/architecture.md`](./docs/architecture.md)
 ## Repository layout
 
 ```text
-app/           FastAPI application code
+src/rust_assistant/  FastAPI application code
 tests/         Unit and integration tests
 scripts/       Operational and maintenance scripts
 docker/        Dockerfiles and container assets

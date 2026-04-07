@@ -1,86 +1,113 @@
-﻿name: rust-assistant
+name: rust-assistant
 
 services:
   proxy:
     image: caddy:2.11.2
     container_name: rust-assistant-proxy
-    networks:
-      - public
-      - app
     restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
     environment:
-      BACKEND_PORT: ${BACKEND_PORT}
+      PORT: ${PORT}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - /opt/rust-assistant/data/caddy:/data
-      - /opt/rust-assistant/config/caddy:/config
-
-# todo
-  backend:
-    image: ghcr.io/serhii-dzebliuk/rust-assistant-backend:latest
-    container_name: rust-assistant-backend
+      - caddy_data:/data
+      - caddy_config:/config
     networks:
+      - public
       - app
-      - db
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rust-assistant-backend:local
+    container_name: rust-assistant-backend
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      QDRANT_URL: http://qdrant:6333
-      HOST: 0.0.0.0
-      PORT: ${BACKEND_PORT}
+      HOST: ${HOST}
+      PORT: ${PORT}
+      RELOAD: ${RELOAD}
+      API_MODE: ${API_MODE}
+      POSTGRES_STATUS: ${POSTGRES_STATUS}
+      QDRANT_STATUS: ${QDRANT_STATUS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: ${DATABASE_URL}
+      QDRANT_URL: ${QDRANT_URL}
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      LLM_MODEL: ${LLM_MODEL}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      LOG_FORMAT: ${LOG_FORMAT}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/api/health" ]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${PORT}/ready || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 20s
-    depends_on:
-      postgres:
-        condition: service_healthy
-        restart: true
-      qdrant:
-        condition: service_healthy
-        restart: true
+    networks:
+      - app
+      - db
 
   postgres:
     image: postgres:18
     container_name: rust-assistant-postgres
-    volumes:
-      - /opt/rust-assistant/data/postgres:/var/lib/postgresql/data
-    networks:
-      - db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - db
 
   qdrant:
     image: qdrant/qdrant:v1.17
     container_name: rust-assistant-qdrant
-    volumes:
-      - /opt/rust-assistant/data/qdrant:/qdrant/storage
-    networks:
-      - db
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:6333/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - db
 
 networks:
   public:
   app:
   db:
     internal: true
+
+volumes:
+  caddy_config:
+  caddy_data:
+  postgres_data:
+  qdrant_data:
+
+
+
