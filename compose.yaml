@@ -96,7 +96,6 @@ networks:
   public:
   app:
   db:
-    internal: true
 
 volumes:
   caddy_config:
