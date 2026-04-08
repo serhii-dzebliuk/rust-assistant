@@ -30,7 +30,7 @@ services:
       postgres:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     environment:
       HOST: ${HOST}
       PORT: ${PORT}
@@ -83,12 +83,6 @@ services:
     image: qdrant/qdrant:v1.17
     container_name: rust-assistant-qdrant
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:6333/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
