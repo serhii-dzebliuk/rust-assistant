@@ -9,8 +9,10 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import Optional, Union
 
-from rust_assistant.models import BlockType, Crate, Document, StructuredBlock
+from rust_assistant.ingest.entities import BlockType, Document, StructuredBlock
+from rust_assistant.schemas.enums import Crate
 
 from .parsing.core import blocks_to_text
 
@@ -103,7 +105,7 @@ class DocumentCleaner:
             cleaned_blocks.append(block.model_copy(update={"text": cleaned_text}))
         return cleaned_blocks
 
-    def clean_document(self, doc: Document) -> Document | None:
+    def clean_document(self, doc: Document) -> Optional[Document]:
         """
         Clean a document and optionally filter out too-short content.
 
@@ -130,7 +132,7 @@ class DocumentCleaner:
 
 def clean_documents(
     docs: list[Document],
-    output_file: Path | str | None = None,
+    output_file: Optional[Union[Path, str]] = None,
 ) -> list[Document]:
     """
     Clean a list of parsed documents.

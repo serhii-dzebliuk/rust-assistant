@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
-from rust_assistant.models import Crate, ItemType
+from rust_assistant.schemas.enums import Crate, ItemType
 
 
 class SearchFilters(BaseModel):
     """Optional filters accepted by the search endpoint."""
 
-    crate: Crate | None = None
-    item_type: ItemType | None = None
+    crate: Optional[Crate] = None
+    item_type: Optional[ItemType] = None
 
 
 class SearchHit(BaseModel):
@@ -19,8 +21,10 @@ class SearchHit(BaseModel):
 
     title: str
     source_path: str
-    section: str | None = None
-    item_path: str | None = None
+    section: Optional[str] = None
+    item_path: Optional[str] = None
+    crate: Optional[str] = None
+    item_type: Optional[str] = None
     score: float = Field(..., ge=0.0, le=1.0)
     snippet: str
 
@@ -30,7 +34,7 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000)
     k: int = Field(default=5, ge=1, le=50)
-    filters: SearchFilters | None = None
+    filters: Optional[SearchFilters] = None
 
     @field_validator("query")
     @classmethod

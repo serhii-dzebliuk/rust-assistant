@@ -5,13 +5,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Final, Mapping
+from typing import Final, Mapping, Optional
 
 from dotenv import load_dotenv
 
 
 TRUE_VALUES: Final[frozenset[str]] = frozenset({"1", "true", "yes", "on"})
 FALSE_VALUES: Final[frozenset[str]] = frozenset({"0", "false", "no", "off"})
+
 
 @dataclass(slots=True, frozen=True)
 class Settings:
@@ -48,27 +49,30 @@ class DependencyStatusSettings:
 class PostgresSettings:
     """PostgreSQL connection settings."""
 
-    database: str | None
-    user: str | None
-    password: str | None
-    url: str | None
+    database: Optional[str]
+    user: Optional[str]
+    password: Optional[str]
+    url: Optional[str]
+    echo: bool
+    pool_size: int
+    max_overflow: int
 
 
 @dataclass(slots=True, frozen=True)
 class QdrantSettings:
     """Qdrant connection settings."""
 
-    url: str | None
+    url: Optional[str]
 
 
 @dataclass(slots=True, frozen=True)
 class LLMSettings:
     """LLM and embedding provider settings."""
 
-    provider: str | None
-    model: str | None
-    embedding_provider: str | None
-    embedding_model: str | None
+    provider: Optional[str]
+    model: Optional[str]
+    embedding_provider: Optional[str]
+    embedding_model: Optional[str]
 
 
 @dataclass(slots=True, frozen=True)
@@ -83,7 +87,7 @@ class LoggingSettings:
 class ProxySettings:
     """Public/proxy settings used by local tooling and deployment."""
 
-    public_base_url: str | None
+    public_base_url: Optional[str]
 
 
 def build_settings(env: Mapping[str, str]) -> Settings:
@@ -103,6 +107,9 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         user=_read_optional_str(env, "POSTGRES_USER"),
         password=_read_optional_str(env, "POSTGRES_PASSWORD"),
         url=_read_optional_str(env, "DATABASE_URL"),
+        echo=_read_bool(env, "POSTGRES_ECHO", default=False),
+        pool_size=_read_int(env, "POSTGRES_POOL_SIZE", default=10, minimum=0),
+        max_overflow=_read_int(env, "POSTGRES_MAX_OVERFLOW", default=10, minimum=0),
     )
     qdrant = QdrantSettings(url=_read_optional_str(env, "QDRANT_URL"))
     llm = LLMSettings(
@@ -133,7 +140,7 @@ def _read_str(
     env: Mapping[str, str],
     name: str,
     *,
-    default: str | None = None,
+    default: Optional[str] = None,
 ) -> str:
     """Read a required-or-default string value from a mapping."""
     value = env.get(name)
@@ -144,7 +151,7 @@ def _read_str(
     return value.strip()
 
 
-def _read_optional_str(env: Mapping[str, str], name: str) -> str | None:
+def _read_optional_str(env: Mapping[str, str], name: str) -> Optional[str]:
     """Read an optional string value from a mapping."""
     value = env.get(name)
     if value is None or not value.strip():

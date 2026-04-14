@@ -23,11 +23,11 @@ def health(
 
 
 @router.get("/ready", response_model=ReadyResponse)
-def ready(
+async def ready(
     readiness_service: ReadinessService = Depends(get_readiness_service),
 ) -> ReadyResponse:
     """Readiness endpoint backed by the readiness application service."""
-    readiness = readiness_service.readiness()
+    readiness = await readiness_service.readiness()
     return ReadyResponse(
         status=readiness.status,
         ready=readiness.ready,

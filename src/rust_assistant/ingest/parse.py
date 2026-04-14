@@ -8,18 +8,18 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
+from rust_assistant.ingest.entities import Document
 from rust_assistant.ingest.parsing.page_parser import PageParser
-from rust_assistant.models import Document
 
 logger = logging.getLogger(__name__)
 
 
 def parse(
     html_files: list[Path],
-    raw_data_dir: Path | str = "data/raw",
-    output_file: Optional[Path | str] = None,
+    raw_data_dir: Union[Path, str] = "data/raw",
+    output_file: Optional[Union[Path, str]] = None,
 ) -> list[Document]:
     """
     Parse discovered HTML files into `Document` instances.

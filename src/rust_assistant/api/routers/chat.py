@@ -22,18 +22,20 @@ def _to_search_hit(hit: RetrievedChunk) -> SearchHit:
         source_path=hit.source_path,
         section=hit.section,
         item_path=hit.item_path,
+        crate=hit.crate,
+        item_type=hit.item_type,
         score=hit.score,
         snippet=hit.snippet,
     )
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(
+async def chat(
     payload: ChatRequest,
     chat_service: ChatService = Depends(get_chat_service),
 ) -> ChatResponse:
     """Chat endpoint backed by the chat application service."""
-    chat_result = chat_service.chat(
+    chat_result = await chat_service.chat(
         question=payload.question,
         k=payload.k,
         filters=payload.filters.model_dump(mode="json", exclude_none=True)

@@ -1,8 +1,10 @@
 """Utility helpers for parsing stage path and source mapping."""
 
 from pathlib import Path
+from typing import Optional
 
-from rust_assistant.models import Crate, SourceType
+from rust_assistant.ingest.entities import SourceType
+from rust_assistant.schemas.enums import Crate
 
 
 def map_to_source_type(crate: Crate) -> SourceType:
@@ -88,7 +90,7 @@ def source_path_from_raw(raw_data_dir: Path, file_path: Path) -> str:
         return str(file_path)
 
 
-def source_path_to_url(source_path: str, crate: Crate) -> str | None:
+def source_path_to_url(source_path: str, crate: Crate) -> Optional[str]:
     """
     Build canonical online documentation URL for a parsed source path.
 

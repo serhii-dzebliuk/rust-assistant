@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 
 from bs4 import BeautifulSoup, Tag
 
-from rust_assistant.models import Crate
+from rust_assistant.schemas.enums import Crate
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class DocumentDiscoverer:
         "button",
     )
 
-    def __init__(self, raw_data_dir: Path | str):
+    def __init__(self, raw_data_dir: Union[Path, str]):
         """
         Initialize discoverer.
         """
@@ -194,7 +194,7 @@ class DocumentDiscoverer:
             return True
         return False
 
-    def _read_head(self, path: Path, bytes_count: int) -> str | None:
+    def _read_head(self, path: Path, bytes_count: int) -> Optional[str]:
         """
         Read initial chunk of a file for lightweight content checks.
 
@@ -253,7 +253,7 @@ class DocumentDiscoverer:
         legacy_marker = "there is a new edition of the book and this is an old link."
         return legacy_marker in head
 
-    def _select_main_root(self, soup: BeautifulSoup) -> Tag | None:
+    def _select_main_root(self, soup: BeautifulSoup) -> Optional[Tag]:
         """
         Select best effort main content root for lightweight content checks.
 
@@ -310,7 +310,7 @@ class DocumentDiscoverer:
 
 
 def discover_documents(
-    raw_data_dir: Path | str = "data/raw",
+    raw_data_dir: Union[Path, str] = "data/raw",
     crates: Optional[list[str]] = None,
     limit: Optional[int] = None,
 ) -> list[Path]:

@@ -9,8 +9,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional, Union
 
-from rust_assistant.models import BlockType, Chunk, ChunkMetadata, Crate, Document, StructuredBlock
+from rust_assistant.ingest.entities import BlockType, Chunk, ChunkMetadata, Document, StructuredBlock
+from rust_assistant.schemas.enums import Crate
 
 from .parsing.core import blocks_to_text
 
@@ -39,7 +41,7 @@ class SectionSpan:
 
     block_indexes: list[int]
     section_path: list[str]
-    anchor: str | None
+    anchor: Optional[str]
 
 
 class BaseChunkStrategy:
@@ -300,7 +302,7 @@ class DocumentChunker:
             return []
 
         first_index = section_indexes[0]
-        heading_index: int | None = None
+        heading_index: Optional[int] = None
         if doc.structured_blocks[first_index].block_type == BlockType.HEADING:
             heading_index = first_index
             content_indexes = section_indexes[1:]
@@ -465,7 +467,7 @@ class DocumentChunker:
         self,
         doc: Document,
         section: SectionSpan,
-        heading_index: int | None,
+        heading_index: Optional[int],
         block_index: int,
         block: StructuredBlock,
         block_spans: list[tuple[int, int]],
@@ -811,7 +813,7 @@ class DocumentChunker:
 
 def chunk_documents(
     docs: list[Document],
-    output_file: Path | str | None = None,
+    output_file: Optional[Union[Path, str]] = None,
     max_chunk_chars: int = 1400,
 ) -> list[Chunk]:
     """

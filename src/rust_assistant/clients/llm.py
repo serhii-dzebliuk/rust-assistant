@@ -21,7 +21,7 @@ class LLMResult:
 class LLMClient(Protocol):
     """Interface for language model providers used by chat runtime."""
 
-    def answer(
+    async def answer(
         self,
         *,
         prompt: PromptPayload,
@@ -37,7 +37,7 @@ class StubLLMClient:
     def __init__(self, *, model_name: str = "stub-llm") -> None:
         self._model_name = model_name
 
-    def answer(
+    async def answer(
         self,
         *,
         prompt: PromptPayload,

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 from bs4 import BeautifulSoup, Tag
 
-from rust_assistant.models import BlockType, StructuredBlock
+from rust_assistant.ingest.entities import BlockType, StructuredBlock
 
 
 COMMON_REMOVE_SELECTORS = (
@@ -170,7 +171,7 @@ def _extract_code_block_text(pre: Tag) -> str:
     return pre.get_text(strip=False).strip("\n")
 
 
-def _extract_anchor(node: Tag) -> str | None:
+def _extract_anchor(node: Tag) -> Optional[str]:
     """
     Extract a stable anchor identifier from a node or its closest container.
 
@@ -204,7 +205,7 @@ def extract_structured_blocks(root: Tag) -> list[StructuredBlock]:
         True
     """
     blocks: list[StructuredBlock] = []
-    section_stack: list[tuple[int, str, str | None]] = []
+    section_stack: list[tuple[int, str, Optional[str]]] = []
     tags = ("h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "pre", "dt", "dd")
     for element in root.find_all(tags):
         inside_pre = any(
@@ -331,7 +332,7 @@ def extract_structured_blocks(root: Tag) -> list[StructuredBlock]:
     return blocks
 
 
-def _current_section_anchor(section_stack: list[tuple[int, str, str | None]]) -> str | None:
+def _current_section_anchor(section_stack: list[tuple[int, str, Optional[str]]]) -> Optional[str]:
     """
     Return the closest heading anchor from the current section stack.
 

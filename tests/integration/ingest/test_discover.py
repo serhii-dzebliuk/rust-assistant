@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from rust_assistant.ingest.discover import DocumentDiscoverer
-from rust_assistant.models import Crate
+from rust_assistant.schemas.enums import Crate
 
 pytestmark = pytest.mark.integration
 

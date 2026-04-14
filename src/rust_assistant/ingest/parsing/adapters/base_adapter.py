@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Optional
 
 from bs4 import BeautifulSoup, Tag
 
-from rust_assistant.models import StructuredBlock
+from rust_assistant.ingest.entities import StructuredBlock
 
 from ..core import (
     COMMON_REMOVE_SELECTORS,
@@ -28,7 +29,7 @@ class HtmlAdapter(ABC):
     main_selectors: tuple[str, ...] = ("main", "body")
     extra_remove_selectors: tuple[str, ...] = ()
 
-    def select_main(self, soup: BeautifulSoup) -> Tag | None:
+    def select_main(self, soup: BeautifulSoup) -> Optional[Tag]:
         """
         Select the most relevant main-content node from a parsed document.
 

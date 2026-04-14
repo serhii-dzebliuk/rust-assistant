@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 from .search import SearchFilters, SearchHit
@@ -12,7 +14,7 @@ class ChatRequest(BaseModel):
 
     question: str = Field(..., min_length=1, max_length=1000)
     k: int = Field(default=5, ge=1, le=20)
-    filters: SearchFilters | None = None
+    filters: Optional[SearchFilters] = None
     debug: bool = False
 
     @field_validator("question")
@@ -29,9 +31,9 @@ class ChatDebugInfo(BaseModel):
 
     mode: str = "stub"
     dependencies: dict[str, str] = Field(default_factory=dict)
-    retrieval_time_ms: float | None = None
-    model_name: str | None = None
-    retrieved_sources: int | None = None
+    retrieval_time_ms: Optional[float] = None
+    model_name: Optional[str] = None
+    retrieved_sources: Optional[int] = None
 
 
 class ChatResponse(BaseModel):
@@ -41,5 +43,5 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list[SearchHit] = Field(default_factory=list)
     confidence: str = "unknown"
-    debug_info: ChatDebugInfo | None = None
+    debug_info: Optional[ChatDebugInfo] = None
     mode: str = "stub"

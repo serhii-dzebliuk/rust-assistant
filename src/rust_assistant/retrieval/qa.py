@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from rust_assistant.clients.llm import LLMClient, StubLLMClient
 
@@ -27,7 +29,7 @@ class QAResult:
     answer: str
     sources: list[RetrievedChunk] = field(default_factory=list)
     confidence: str = "unknown"
-    debug_data: QADebugData | None = None
+    debug_data: Optional[QADebugData] = None
 
 
 class QAPipeline:
@@ -36,29 +38,35 @@ class QAPipeline:
     def __init__(
         self,
         *,
-        retriever: Retriever | None = None,
-        prompt_builder: PromptBuilder | None = None,
-        llm: LLMClient | None = None,
+        retriever: Optional[Retriever] = None,
+        prompt_builder: Optional[PromptBuilder] = None,
+        llm: Optional[LLMClient] = None,
     ) -> None:
         self._retriever = retriever or StubRetriever()
         self._prompt_builder = prompt_builder or PromptBuilder()
         self._llm = llm or StubLLMClient()
 
-    def answer(
+    async def answer(
         self,
         *,
         question: str,
         k: int,
-        filters: Mapping[str, Any] | None = None,
+        filters: Optional[Mapping[str, Any]] = None,
         debug: bool = False,
+        session: Optional[AsyncSession] = None,
     ) -> QAResult:
         """Generate a chat answer using the runtime RAG building blocks."""
-        retrieval = self._retriever.search(query=question, k=k, filters=filters)
+        retrieval = await self._retriever.search(
+            query=question,
+            k=k,
+            filters=filters,
+            session=session,
+        )
         prompt = self._prompt_builder.build_chat_prompt(
             question=question,
             context_chunks=retrieval.hits,
         )
-        llm_result = self._llm.answer(
+        llm_result = await self._llm.answer(
             prompt=prompt,
             question=question,
             context_chunks=retrieval.hits,

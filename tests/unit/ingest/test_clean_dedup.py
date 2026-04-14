@@ -2,7 +2,8 @@ import pytest
 
 from rust_assistant.ingest.clean import clean_documents
 from rust_assistant.ingest.dedup import deduplicate_documents
-from rust_assistant.models import BlockType, Crate, Document, DocumentMetadata, StructuredBlock
+from rust_assistant.ingest.entities import BlockType, Document, DocumentMetadata, StructuredBlock
+from rust_assistant.schemas.enums import Crate
 
 pytestmark = pytest.mark.unit
 

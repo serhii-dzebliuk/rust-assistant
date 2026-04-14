@@ -21,18 +21,20 @@ def _to_search_hit(hit: RetrievedChunk) -> SearchHit:
         source_path=hit.source_path,
         section=hit.section,
         item_path=hit.item_path,
+        crate=hit.crate,
+        item_type=hit.item_type,
         score=hit.score,
         snippet=hit.snippet,
     )
 
 
 @router.post("/search", response_model=SearchResponse)
-def search(
+async def search(
     payload: SearchRequest,
     search_service: SearchService = Depends(get_search_service),
 ) -> SearchResponse:
     """Search endpoint backed by the search application service."""
-    search_result = search_service.search(
+    search_result = await search_service.search(
         query=payload.query,
         k=payload.k,
         filters=payload.filters.model_dump(mode="json", exclude_none=True)

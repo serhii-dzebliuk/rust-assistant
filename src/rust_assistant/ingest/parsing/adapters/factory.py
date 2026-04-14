@@ -1,6 +1,6 @@
 """Factory for source-specific HTML adapters."""
 
-from rust_assistant.models import SourceType
+from rust_assistant.ingest.entities import SourceType
 
 from .base_adapter import HtmlAdapter
 from .book_adapter import BookAdapter

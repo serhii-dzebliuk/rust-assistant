@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Optional
 
 
 READY_DEPENDENCY_STATUSES = frozenset({"ok", "ready", "connected", "not_configured"})
+DependencyProbe = Callable[[], Awaitable[str]]
 
 
 @dataclass(slots=True, frozen=True)
@@ -34,18 +36,26 @@ class ReadinessService:
         self,
         *,
         mode: str = "stub",
-        dependencies: Mapping[str, str] | None = None,
+        dependencies: Optional[Mapping[str, str]] = None,
+        dependency_probes: Optional[Mapping[str, DependencyProbe]] = None,
     ) -> None:
         self._mode = mode
         self._dependencies = dict(dependencies or {})
+        self._dependency_probes = dict(dependency_probes or {})
 
     def health(self) -> HealthStatus:
         """Report whether the HTTP process itself is alive."""
         return HealthStatus(status="ok", mode=self._mode)
 
-    def readiness(self) -> ReadinessStatus:
+    async def readiness(self) -> ReadinessStatus:
         """Report whether the serving process is ready to accept traffic."""
         dependencies = dict(self._dependencies)
+        for name, probe in self._dependency_probes.items():
+            try:
+                dependencies[name] = await probe()
+            except Exception:
+                dependencies[name] = "not_ready"
+
         ready = all(self._dependency_is_ready(status) for status in dependencies.values())
         return ReadinessStatus(
             status="ready" if ready else "not_ready",

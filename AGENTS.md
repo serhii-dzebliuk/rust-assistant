@@ -13,14 +13,14 @@
   - `src/rust_assistant/retrieval/` — retrieval flow, ranking, context assembly, Qdrant-facing retrieval orchestration
   - `src/rust_assistant/ingest/` — document loading, parsing, chunking, metadata extraction, embedding pipeline
   - `src/rust_assistant/clients/` — external integrations such as LLM clients, embedding clients, and other provider adapters
-  - `src/rust_assistant/repositories/` — Postgres persistence logic for chunks, documents, metadata, and ingestion state
+  - `src/rust_assistant/repositories/` — Postgres persistence logic for chunks, documents, metadata, and chunk synchronization state
   - `src/rust_assistant/models/` — ORM/database models(DB layer)
   - `src/rust_assistant/schemas/` — shared Pydantic schemas and DTOs(API layer)
   - `src/rust_assistant/core/` — settings, logging, security, dependency wiring, shared app configuration
   - `src/rust_assistant/utils/` — small generic helpers only; do not place core business logic here
 - Keep retrieval concerns separate from persistence concerns:
   - Qdrant is the vector retrieval store
-  - Postgres is the source of truth for chunk text, document metadata, and ingest bookkeeping
+  - Postgres is the source of truth for chunk text, document metadata, and chunk synchronization state
 - Keep LangChain orchestration out of routers; place it in dedicated service/retrieval modules.
 - Keep external provider code behind dedicated client/adaptor modules so orchestration logic is not coupled to one provider SDK.
 - Routers should call services; they must not directly contain retrieval pipelines, database logic, or provider-specific code.
@@ -56,7 +56,7 @@
 - Expose public HTTP/HTTPS traffic only through Caddy unless a service explicitly requires direct access.
 - Keep the backend, Postgres, and Qdrant on internal Docker networks where possible.
 - Keep the backend stateless; persistent state must live in Postgres and Qdrant volumes.
-- Use Postgres for chunk text, document metadata, ingest bookkeeping, and relational application data.
+- Use Postgres for chunk text, document metadata, chunk synchronization state, and relational application data.
 - Use Qdrant only for vector storage and retrieval.
 - Use service names for internal container-to-container communication.
 - Do not hardcode hostnames, ports, credentials, file paths, or secrets in application code.
@@ -107,6 +107,8 @@
 - Keep functions small and focused on one responsibility.
 - Prefer explicit code over hidden magic or overly compact expressions.
 - Add type hints for function arguments, return values, and important variables where helpful.
+- For optional type annotations, prefer `Optional[T]` over `T | None`.
+- For non-optional union type annotations, prefer `Union[T1, T2, ...]` over `T1 | T2 | ...`.
 - Write short, useful docstrings for public modules, classes, and functions.
 - Function docstrings should describe:
   - what the function does
@@ -186,3 +188,4 @@
 - Add or update tests in every change that affects behavior.
 - Add regression tests for bug fixes.
 - Mark regression tests with `@pytest.mark.regression` when it is useful to run them separately.
+

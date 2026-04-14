@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from rust_assistant.retrieval.qa import QAPipeline
 from rust_assistant.retrieval.retriever import RetrievedChunk
@@ -15,9 +17,9 @@ class ChatDebugData:
 
     mode: str
     dependencies: dict[str, str] = field(default_factory=dict)
-    retrieval_time_ms: float | None = None
-    model_name: str | None = None
-    retrieved_sources: int | None = None
+    retrieval_time_ms: Optional[float] = None
+    model_name: Optional[str] = None
+    retrieved_sources: Optional[int] = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -28,7 +30,7 @@ class ChatResult:
     answer: str
     sources: list[RetrievedChunk] = field(default_factory=list)
     confidence: str = "unknown"
-    debug_info: ChatDebugData | None = None
+    debug_info: Optional[ChatDebugData] = None
     mode: str = "stub"
 
 
@@ -39,27 +41,30 @@ class ChatService:
         self,
         *,
         mode: str = "stub",
-        dependencies: Mapping[str, str] | None = None,
-        qa_pipeline: QAPipeline | None = None,
+        dependencies: Optional[Mapping[str, str]] = None,
+        qa_pipeline: Optional[QAPipeline] = None,
+        session: Optional[AsyncSession] = None,
     ) -> None:
         self._mode = mode
         self._dependencies = dict(dependencies or {})
         self._qa_pipeline = qa_pipeline or QAPipeline()
+        self._session = session
 
-    def chat(
+    async def chat(
         self,
         *,
         question: str,
         k: int,
-        filters: Mapping[str, Any] | None = None,
+        filters: Optional[Mapping[str, Any]] = None,
         debug: bool = False,
     ) -> ChatResult:
         """Execute the runtime QA flow and adapt it to the service response shape."""
-        qa_result = self._qa_pipeline.answer(
+        qa_result = await self._qa_pipeline.answer(
             question=question,
             k=k,
             filters=filters,
             debug=debug,
+            session=self._session,
         )
 
         debug_info = None

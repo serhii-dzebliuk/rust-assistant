@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from rust_assistant.retrieval.retriever import RetrievedChunk, Retriever, StubRetriever
 
@@ -26,20 +28,27 @@ class SearchService:
         self,
         *,
         mode: str = "stub",
-        retriever: Retriever | None = None,
+        retriever: Optional[Retriever] = None,
+        session: Optional[AsyncSession] = None,
     ) -> None:
         self._mode = mode
         self._retriever = retriever or StubRetriever()
+        self._session = session
 
-    def search(
+    async def search(
         self,
         *,
         query: str,
         k: int,
-        filters: Mapping[str, Any] | None = None,
+        filters: Optional[Mapping[str, Any]] = None,
     ) -> SearchResultPage:
         """Execute runtime retrieval and adapt it to the API-facing service shape."""
-        retrieval = self._retriever.search(query=query, k=k, filters=filters)
+        retrieval = await self._retriever.search(
+            query=query,
+            k=k,
+            filters=filters,
+            session=self._session,
+        )
         return SearchResultPage(
             query=retrieval.query,
             total_results=retrieval.total_results,

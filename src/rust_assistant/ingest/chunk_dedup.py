@@ -10,8 +10,9 @@ import logging
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional, Union
 
-from rust_assistant.models import Chunk
+from rust_assistant.ingest.entities import Chunk
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class ChunkDeduplicator:
 
 def deduplicate_chunks(
     chunks: list[Chunk],
-    output_file: Path | str | None = None,
+    output_file: Optional[Union[Path, str]] = None,
 ) -> list[Chunk]:
     """
     Deduplicate chunks and optionally persist the result as JSONL.

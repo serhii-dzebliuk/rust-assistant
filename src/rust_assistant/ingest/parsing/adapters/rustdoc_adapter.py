@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 from bs4 import BeautifulSoup, Tag
 
@@ -57,7 +58,7 @@ class RustdocAdapter(HtmlAdapter):
             node.decompose()
         return root
 
-    def _canonical_title(self, soup: BeautifulSoup, file_path: Path) -> str | None:
+    def _canonical_title(self, soup: BeautifulSoup, file_path: Path) -> Optional[str]:
         """
         Build canonical rustdoc title from breadcrumbs, heading, and file hints.
 
@@ -89,7 +90,7 @@ class RustdocAdapter(HtmlAdapter):
 
         return None
 
-    def _extract_item_name(self, soup: BeautifulSoup) -> str | None:
+    def _extract_item_name(self, soup: BeautifulSoup) -> Optional[str]:
         """
         Extract pure rustdoc item name from main heading without UI labels.
 
@@ -132,7 +133,7 @@ class RustdocAdapter(HtmlAdapter):
             raw_title = raw_title[:-7].strip()
         return raw_title
 
-    def _title_from_file_path(self, file_path: Path) -> str | None:
+    def _title_from_file_path(self, file_path: Path) -> Optional[str]:
         """
         Infer canonical titles for special rustdoc pages from file path.
 

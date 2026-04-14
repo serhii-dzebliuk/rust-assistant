@@ -3,13 +3,13 @@ import pytest
 from rust_assistant.ingest.chunk import DocumentChunker, chunk_documents
 from rust_assistant.ingest.chunk_dedup import deduplicate_chunks
 from rust_assistant.ingest.parsing.core import blocks_to_text
-from rust_assistant.models import (
+from rust_assistant.ingest.entities import (
     BlockType,
-    Crate,
     Document,
     DocumentMetadata,
     StructuredBlock,
 )
+from rust_assistant.schemas.enums import Crate
 
 pytestmark = pytest.mark.unit
 

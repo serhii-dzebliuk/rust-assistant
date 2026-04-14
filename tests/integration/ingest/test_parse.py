@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from rust_assistant.models import BlockType
+from rust_assistant.ingest.entities import BlockType
 
 pytestmark = pytest.mark.integration
 

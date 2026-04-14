@@ -2,9 +2,16 @@
 
 from .prompt import PromptBuilder, PromptPayload
 from .qa import QADebugData, QAPipeline, QAResult
-from .retriever import RetrievalResult, RetrievedChunk, Retriever, StubRetriever
+from .retriever import (
+    DatabaseBackedRetriever,
+    RetrievalResult,
+    RetrievedChunk,
+    Retriever,
+    StubRetriever,
+)
 
 __all__ = [
+    "DatabaseBackedRetriever",
     "PromptBuilder",
     "PromptPayload",
     "QADebugData",

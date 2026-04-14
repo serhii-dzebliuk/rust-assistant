@@ -11,8 +11,9 @@ import logging
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional, Union
 
-from rust_assistant.models import Document
+from rust_assistant.ingest.entities import Document
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class DocumentDeduplicator:
 
 def deduplicate_documents(
     docs: list[Document],
-    output_file: Path | str | None = None,
+    output_file: Optional[Union[Path, str]] = None,
 ) -> list[Document]:
     """
     Deduplicate cleaned documents and optionally persist JSONL output.

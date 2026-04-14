@@ -3,11 +3,12 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from bs4 import BeautifulSoup
 
-from rust_assistant.models import Crate, Document, DocumentMetadata, ItemType
+from rust_assistant.ingest.entities import Document, DocumentMetadata
+from rust_assistant.schemas.enums import Crate, ItemType
 
 from .adapters.factory import get_adapter
 from .utils import (
@@ -65,7 +66,7 @@ class PageParser:
         "impl": ItemType.IMPL,
     }
 
-    def __init__(self, raw_data_dir: Path | str):
+    def __init__(self, raw_data_dir: Union[Path, str]):
         """
         Initialize parser with raw data root path.
 
@@ -73,7 +74,7 @@ class PageParser:
             raw_data_dir: Root path used for source-path and version resolution.
         """
         self.raw_data_dir = Path(raw_data_dir).resolve()
-        self._rust_versions: dict[Crate, str | None] = {}
+        self._rust_versions: dict[Crate, Optional[str]] = {}
 
     def parse_file(self, file_path: Path) -> Optional[Document]:
         """
@@ -210,7 +211,7 @@ class PageParser:
         crate: Crate,
         file_path: Path,
         soup: BeautifulSoup,
-    ) -> ItemType | None:
+    ) -> Optional[ItemType]:
         """
         Detect item type metadata for parsed documents.
 
@@ -250,7 +251,7 @@ class PageParser:
         title: str,
         file_path: Path,
         soup: BeautifulSoup,
-    ) -> ItemType | None:
+    ) -> Optional[ItemType]:
         """
         Detect rustdoc item type using file naming and body class hints.
 
@@ -288,7 +289,7 @@ class PageParser:
             return ItemType.UNKNOWN
         return None
 
-    def _resolve_rust_version(self, crate: Crate) -> str | None:
+    def _resolve_rust_version(self, crate: Crate) -> Optional[str]:
         """
         Resolve docs snapshot version for a crate with in-memory caching.
 
@@ -311,7 +312,7 @@ class PageParser:
         self._rust_versions[crate] = version
         return version
 
-    def _resolve_book_version(self) -> str | None:
+    def _resolve_book_version(self) -> Optional[str]:
         """
         Resolve Rust version from Rust Book landing page.
 
@@ -327,7 +328,7 @@ class PageParser:
         match = re.search(r"Rust (\d+\.\d+\.\d+)", text)
         return match.group(1) if match else None
 
-    def _resolve_std_version(self) -> str | None:
+    def _resolve_std_version(self) -> Optional[str]:
         """
         Resolve rustdoc snapshot version from std crate index page.
 
@@ -352,7 +353,7 @@ class PageParser:
                 return text
         return None
 
-    def _resolve_cargo_version(self) -> str | None:
+    def _resolve_cargo_version(self) -> Optional[str]:
         """
         Resolve Cargo docs snapshot version from changelog page.
 

@@ -14,6 +14,9 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.app.api_mode == "stub"
     assert settings.dependencies.postgres == "not_configured"
     assert settings.dependencies.qdrant == "not_configured"
+    assert settings.postgres.echo is False
+    assert settings.postgres.pool_size == 10
+    assert settings.postgres.max_overflow == 10
 
 
 def test_build_settings_parses_explicit_values():
@@ -30,7 +33,10 @@ def test_build_settings_parses_explicit_values():
             "POSTGRES_DB": "docs",
             "POSTGRES_USER": "app",
             "POSTGRES_PASSWORD": "secret",
-            "DATABASE_URL": "postgres://app:secret@postgres:5432/docs",
+            "DATABASE_URL": "postgresql+asyncpg://app:secret@postgres:5432/docs",
+            "POSTGRES_ECHO": "true",
+            "POSTGRES_POOL_SIZE": "20",
+            "POSTGRES_MAX_OVERFLOW": "5",
             "QDRANT_URL": "http://qdrant:6333",
             "LLM_PROVIDER": "openai",
             "LLM_MODEL": "gpt-5",
@@ -49,7 +55,10 @@ def test_build_settings_parses_explicit_values():
     assert settings.postgres.database == "docs"
     assert settings.postgres.user == "app"
     assert settings.postgres.password == "secret"
-    assert settings.postgres.url == "postgres://app:secret@postgres:5432/docs"
+    assert settings.postgres.url == "postgresql+asyncpg://app:secret@postgres:5432/docs"
+    assert settings.postgres.echo is True
+    assert settings.postgres.pool_size == 20
+    assert settings.postgres.max_overflow == 5
     assert settings.qdrant.url == "http://qdrant:6333"
     assert settings.llm.provider == "openai"
     assert settings.llm.model == "gpt-5"
@@ -69,6 +78,7 @@ def test_build_settings_rejects_invalid_boolean_values():
         raise AssertionError("Expected build_settings to reject invalid boolean values")
 
 
+
 def test_get_settings_uses_cache_and_can_be_cleared(monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("PORT", "8123")
@@ -77,4 +87,3 @@ def test_get_settings_uses_cache_and_can_be_cleared(monkeypatch):
     assert settings.app.port == 8123
 
     get_settings.cache_clear()
-
