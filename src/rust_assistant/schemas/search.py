@@ -50,10 +50,4 @@ class SearchResponse(BaseModel):
 
     query: str
     total_results: int
-    results: list[SearchHit] = Field(default_factory=list)
-    # TODO: Populate latency from the real retrieval pipeline instead of the
-    # stub zero value.
-    retrieval_time_ms: float = 0.0
-    # TODO: Remove the stub default once the route always returns runtime mode.
-    mode: str = "stub"
-
+    results: list[SearchHit] = Field(default_factory=list[SearchHit])

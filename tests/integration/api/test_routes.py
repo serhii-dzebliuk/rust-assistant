@@ -21,14 +21,20 @@ def client(monkeypatch):
         get_settings.cache_clear()
 
 
-def test_health_and_ready_are_served_without_api_prefix(client: TestClient):
+def test_declared_endpoints_return_not_implemented(client: TestClient):
     health_response = client.get("/health")
     ready_response = client.get("/ready")
+    search_response = client.post("/search", json={"query": "async"})
+    chat_response = client.post("/chat", json={"question": "What is async?"})
 
-    assert health_response.status_code == 200
-    assert ready_response.status_code == 200
-    assert health_response.json()["status"] == "ok"
-    assert ready_response.json()["status"] == "ready"
+    assert health_response.status_code == 501
+    assert ready_response.status_code == 501
+    assert search_response.status_code == 501
+    assert chat_response.status_code == 501
+    assert health_response.json()["detail"] == "Not implemented"
+    assert ready_response.json()["detail"] == "Not implemented"
+    assert search_response.json()["detail"] == "Not implemented"
+    assert chat_response.json()["detail"] == "Not implemented"
 
 
 def test_old_api_prefixed_routes_are_not_exposed(client: TestClient):

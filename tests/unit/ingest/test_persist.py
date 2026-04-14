@@ -44,7 +44,13 @@ class FakeDocumentRepository:
 
 
 class FakeChunkRepository:
+    def __init__(self):
+        self.chunks = None
+        self.documents_by_source_path = None
+
     async def upsert_chunks(self, _session, chunks, _documents_by_source_path):
+        self.chunks = list(chunks)
+        self.documents_by_source_path = dict(_documents_by_source_path)
         records = []
         for index, chunk in enumerate(chunks, start=42):
             record = ChunkRecord(
@@ -56,20 +62,6 @@ class FakeChunkRepository:
             record.id = index
             records.append(record)
         return records
-
-
-class FakeVectorStore:
-    def __init__(self):
-        self.payloads = []
-
-    async def upsert_chunks(self, *, chunks):
-        self.payloads = list(chunks)
-
-
-class FailingVectorStore:
-    async def upsert_chunks(self, *, chunks):
-        _ = chunks
-        raise RuntimeError("qdrant unavailable")
 
 
 def _document() -> Document:
@@ -111,15 +103,15 @@ def _chunk() -> Chunk:
     )
 
 
-def test_persist_ingest_artifacts_uses_database_chunk_id_for_qdrant(monkeypatch):
-    vector_store = FakeVectorStore()
+def test_persist_ingest_artifacts_persists_documents_and_chunks_to_postgres(monkeypatch):
+    chunk_repository = FakeChunkRepository()
     monkeypatch.setattr(
         "rust_assistant.ingest.persist.DocumentRepository",
         lambda: FakeDocumentRepository(),
     )
     monkeypatch.setattr(
         "rust_assistant.ingest.persist.ChunkRepository",
-        lambda: FakeChunkRepository(),
+        lambda: chunk_repository,
     )
 
     result = asyncio.run(
@@ -129,32 +121,11 @@ def test_persist_ingest_artifacts_uses_database_chunk_id_for_qdrant(monkeypatch)
                 deduped_chunks=[_chunk()],
             ),
             session_factory=FakeSessionFactory(),
-            vector_store=vector_store,
         )
     )
 
     assert result.status == "completed"
-    assert vector_store.payloads[0].chunk_id == 42
-
-
-def test_persist_ingest_artifacts_reraises_qdrant_failures(monkeypatch):
-    monkeypatch.setattr(
-        "rust_assistant.ingest.persist.DocumentRepository",
-        lambda: FakeDocumentRepository(),
-    )
-    monkeypatch.setattr(
-        "rust_assistant.ingest.persist.ChunkRepository",
-        lambda: FakeChunkRepository(),
-    )
-
-    with pytest.raises(RuntimeError, match="qdrant unavailable"):
-        asyncio.run(
-            persist_ingest_artifacts(
-                artifacts=PipelineArtifacts(
-                    deduped_docs=[_document()],
-                    deduped_chunks=[_chunk()],
-                ),
-                session_factory=FakeSessionFactory(),
-                vector_store=FailingVectorStore(),
-            )
-        )
+    assert result.document_count == 1
+    assert result.chunk_count == 1
+    assert chunk_repository.chunks == [_chunk()]
+    assert "std/keyword.async.html" in chunk_repository.documents_by_source_path

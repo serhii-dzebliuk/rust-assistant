@@ -8,7 +8,6 @@ import logging
 from dataclasses import replace
 from pathlib import Path
 
-from rust_assistant.clients.vectordb import StubVectorStoreClient
 from rust_assistant.core.config import get_settings
 from rust_assistant.core.db import build_async_engine, build_session_factory, dispose_engine
 from rust_assistant.core.logging import configure_logging
@@ -166,19 +165,16 @@ def main() -> int:
                 persist_ingest_artifacts(
                     artifacts=artifacts,
                     session_factory=session_factory,
-                    vector_store=StubVectorStoreClient(),
                 )
             )
         finally:
             asyncio.run(dispose_engine(db_engine))
 
         logger.info(
-            "Persisted ingest status=%s docs=%s chunks=%s synced=%s failed=%s",
+            "Persisted ingest status=%s docs=%s chunks=%s",
             persistence_result.status,
             persistence_result.document_count,
             persistence_result.chunk_count,
-            persistence_result.synced_chunk_count,
-            persistence_result.failed_chunk_count,
         )
         return 0
 

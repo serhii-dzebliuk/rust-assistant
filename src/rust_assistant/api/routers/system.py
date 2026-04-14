@@ -2,35 +2,27 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, HTTPException, status
 
 from rust_assistant.schemas.system import HealthResponse, ReadyResponse
-from rust_assistant.services.readiness_service import ReadinessService
-
-from ..deps import get_readiness_service
 
 
 router = APIRouter(tags=["system"])
 
 
 @router.get("/health", response_model=HealthResponse)
-def health(
-    readiness_service: ReadinessService = Depends(get_readiness_service),
-) -> HealthResponse:
-    """Liveness endpoint for the API process."""
-    health_status = readiness_service.health()
-    return HealthResponse(status=health_status.status, mode=health_status.mode)
+def health() -> HealthResponse:
+    """Liveness endpoint placeholder until the real implementation is built."""
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Not implemented",
+    )
 
 
 @router.get("/ready", response_model=ReadyResponse)
-async def ready(
-    readiness_service: ReadinessService = Depends(get_readiness_service),
-) -> ReadyResponse:
-    """Readiness endpoint backed by the readiness application service."""
-    readiness = await readiness_service.readiness()
-    return ReadyResponse(
-        status=readiness.status,
-        ready=readiness.ready,
-        mode=readiness.mode,
-        dependencies=readiness.dependencies,
+async def ready() -> ReadyResponse:
+    """Readiness endpoint placeholder until the real implementation is built."""
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Not implemented",
     )
