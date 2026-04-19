@@ -58,7 +58,7 @@ services:
       start_period: 20s
     networks:
       - app
-      - db
+      - private
 
   postgres:
     image: postgres:18
@@ -79,7 +79,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     networks:
-      - db
+      - private
 
   qdrant:
     image: qdrant/qdrant:v1.17
@@ -90,16 +90,35 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
-      - db
+      - private
+
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    container_name: rust-assistant-tei
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - tei_data:/data
+    networks:
+      - private
+    command:
+      - --model-id
+      - microsoft/harrier-oss-v1-0.6b
+      - --pooling
+      - last-token
+      - --max-batch-tokens
+      - "8192"
 
 networks:
   public:
   app:
-  db:
+  private:
 
 volumes:
   caddy_config:
   caddy_data:
   postgres_data:
   qdrant_data:
+  tei_data:
 

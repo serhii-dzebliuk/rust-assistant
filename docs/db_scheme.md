@@ -73,7 +73,8 @@ Columns:
   - example: `https://doc.rust-lang.org/std/keyword.async.html`
 - `source_path`: `TEXT NOT NULL UNIQUE`
   - path to the source HTML file within the downloaded docs tree
-  - example: `std\keyword.async.html`
+  - stored with POSIX `/` separators for cross-platform stability
+  - example: `std/keyword.async.html`
 - `item_path`: `TEXT NULL`
   - logical Rust item path
   - example: `std::keyword::async`
@@ -82,7 +83,7 @@ Columns:
   - example: `1.91.1`
 - `item_type`: `TEXT NULL`
   - documentation item type
-  - example: `module`, `struct`, `enum`, `trait`, `function`, `keyword`, `unknown`
+  - example: `module`, `struct`, `enum`, `trait`, `fn`, `keyword`, `primitive`, `page`, `unknown`
 
 Constraints:
 - `PRIMARY KEY (id)`
@@ -155,6 +156,7 @@ Persistence should map current ingest-domain names to database names:
 2. Persist document-level fields to `documents`.
 3. Persist derived retrieval chunks to `chunks`.
 4. After PostgreSQL assigns `chunks.id`, upsert vectors to Qdrant using those numeric ids.
+5. Qdrant payload stores only lightweight filter metadata, not canonical text.
 
 ### Query path
 
@@ -166,6 +168,10 @@ Persistence should map current ingest-domain names to database names:
 
 Hydrated retrieval output should include `title`, `source_path`, `section`,
 `item_path`, `snippet`, `crate`, and `item_type`.
+
+Qdrant payload should stay minimal and omit `chunks.text`. The intended payload fields are
+`chunk_id`, `document_id`, `crate`, `item_type`, `rust_version`, `source_path`,
+`item_path`, `chunk_index`, and `hash`.
 
 ## Source of Truth
 

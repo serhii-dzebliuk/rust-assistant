@@ -33,6 +33,22 @@ class FakeSession:
             record.id = index
 
 
+class FakeDeleteSession:
+    def __init__(self):
+        self.scalar_results = [2, 5]
+        self.executed = []
+        self.flushed = False
+
+    async def scalar(self, _statement):
+        return self.scalar_results.pop(0)
+
+    async def execute(self, statement):
+        self.executed.append(statement)
+
+    async def flush(self):
+        self.flushed = True
+
+
 def _document(url: Optional[str] = "https://doc.rust-lang.org/std/keyword.async.html") -> Document:
     return Document(
         doc_id="transient-doc-id",
@@ -83,3 +99,14 @@ def test_upsert_documents_rejects_missing_required_url():
 
     with pytest.raises(ValueError, match="Document URL is required"):
         asyncio.run(repository.upsert_documents(session, [_document(url=None)]))
+
+
+def test_delete_by_crates_returns_deleted_document_and_chunk_counts():
+    session = FakeDeleteSession()
+    repository = DocumentRepository()
+
+    counts = asyncio.run(repository.delete_by_crates(session, ["std"]))
+
+    assert counts == (2, 5)
+    assert len(session.executed) == 1
+    assert session.flushed is True

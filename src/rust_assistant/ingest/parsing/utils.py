@@ -36,7 +36,7 @@ def map_to_source_type(crate: Crate) -> SourceType:
 
 def detect_crate_from_path(file_path: Path) -> Crate:
     """
-    Detect crate name from a file path under `data/raw`.
+    Detect crate name from a file path under the configured raw docs root.
 
     Args:
         file_path: Absolute or relative path to an HTML file.
@@ -45,7 +45,7 @@ def detect_crate_from_path(file_path: Path) -> Crate:
         Detected crate enum, or `Crate.UNKNOWN` if detection fails.
 
     Example:
-        >>> detect_crate_from_path(Path("data/raw/std/alloc/index.html"))
+        >>> detect_crate_from_path(Path("rust-docs/std/alloc/index.html"))
         <Crate.STD: 'std'>
     """
     try:
@@ -79,15 +79,15 @@ def source_path_from_raw(raw_data_dir: Path, file_path: Path) -> str:
         Relative source path string used in document metadata.
 
     Example:
-        >>> source_path_from_raw(Path("data/raw"), Path("data/raw/book/index.html"))
-        'book\\\\index.html'
+        >>> source_path_from_raw(Path("rust-docs"), Path("rust-docs/book/index.html"))
+        'book/index.html'
     """
     file_abs = file_path.resolve()
     raw_abs = raw_data_dir.resolve()
     try:
-        return str(file_abs.relative_to(raw_abs))
+        return file_abs.relative_to(raw_abs).as_posix()
     except ValueError:
-        return str(file_path)
+        return file_path.as_posix()
 
 
 def source_path_to_url(source_path: str, crate: Crate) -> Optional[str]:

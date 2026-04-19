@@ -13,9 +13,10 @@ first and only then calling an LLM.
 The repository is currently in a transition state:
 
 - the serving runtime is still mostly stub-based
-- the ingest pipeline still produces file artifacts such as JSONL outputs
-- PostgreSQL and Qdrant are already part of the target architecture, but the full
-  SQLAlchemy/Alembic integration is still being introduced
+- the ingest pipeline keeps intermediate documents and chunks in memory and persists
+  canonical output to PostgreSQL
+- PostgreSQL is wired through SQLAlchemy/Alembic, while Qdrant embedding synchronization
+  is still pending
 
 The architecture below describes the target structure that new persistence and migration
 work should follow.
@@ -127,6 +128,11 @@ The system intentionally separates vector retrieval from canonical content stora
 - embeddings
 - vector search index
 - lightweight retrieval metadata needed for search
+
+Qdrant payloads should not duplicate canonical chunk text. Store only lightweight filter
+metadata such as chunk/document ids, crate, item type, Rust version, source path, item path,
+chunk index, and chunk hash. PostgreSQL remains the source of truth for text and source
+attribution.
 
 This split keeps retrieval fast while preserving a clean canonical data store.
 

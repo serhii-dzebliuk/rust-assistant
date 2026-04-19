@@ -5,10 +5,10 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Final, Mapping, Optional
 
 from dotenv import load_dotenv
-
 
 TRUE_VALUES: Final[frozenset[str]] = frozenset({"1", "true", "yes", "on"})
 FALSE_VALUES: Final[frozenset[str]] = frozenset({"0", "false", "no", "off"})
@@ -23,6 +23,7 @@ class Settings:
     postgres: PostgresSettings
     qdrant: QdrantSettings
     llm: LLMSettings
+    ingest: IngestSettings
     logging: LoggingSettings
     proxy: ProxySettings
 
@@ -76,6 +77,15 @@ class LLMSettings:
 
 
 @dataclass(slots=True, frozen=True)
+class IngestSettings:
+    """Ingest pipeline settings."""
+
+    raw_docs_dir: Optional[Path]
+    max_chunk_chars: int
+    min_chunk_chars: int
+
+
+@dataclass(slots=True, frozen=True)
 class LoggingSettings:
     """Logging settings."""
 
@@ -118,6 +128,13 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         embedding_provider=_read_optional_str(env, "EMBEDDING_PROVIDER"),
         embedding_model=_read_optional_str(env, "EMBEDDING_MODEL"),
     )
+    ingest = IngestSettings(
+        raw_docs_dir=_read_optional_path(env, "RUST_DOCS_RAW_DIR"),
+        max_chunk_chars=_read_int(env, "INGEST_MAX_CHUNK_CHARS", default=1400),
+        min_chunk_chars=_read_int(env, "INGEST_MIN_CHUNK_CHARS", default=180),
+    )
+    if ingest.min_chunk_chars > ingest.max_chunk_chars:
+        raise ValueError("INGEST_MIN_CHUNK_CHARS must be <= INGEST_MAX_CHUNK_CHARS")
     logging = LoggingSettings(
         level=_read_str(env, "LOG_LEVEL", default="INFO"),
         format=_read_str(env, "LOG_FORMAT", default="text"),
@@ -131,6 +148,7 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         postgres=postgres,
         qdrant=qdrant,
         llm=llm,
+        ingest=ingest,
         logging=logging,
         proxy=proxy,
     )
@@ -157,6 +175,12 @@ def _read_optional_str(env: Mapping[str, str], name: str) -> Optional[str]:
     if value is None or not value.strip():
         return None
     return value.strip()
+
+
+def _read_optional_path(env: Mapping[str, str], name: str) -> Optional[Path]:
+    """Read an optional filesystem path from a mapping."""
+    value = _read_optional_str(env, name)
+    return Path(value) if value is not None else None
 
 
 def _read_int(

@@ -19,6 +19,15 @@ def test_configure_logging_sets_root_level_and_text_formatter():
     assert not isinstance(root_logger.handlers[0].formatter, JsonFormatter)
 
 
+def test_configure_logging_keeps_sqlalchemy_quiet_at_debug_level():
+    configure_logging(logging_settings=LoggingSettings(level="DEBUG", format="text"))
+
+    for logger_name in ("sqlalchemy", "sqlalchemy.engine", "sqlalchemy.pool", "asyncpg"):
+        logger = logging.getLogger(logger_name)
+        assert logger.level == logging.WARNING
+        assert logger.propagate is False
+
+
 def test_configure_logging_supports_json_formatter():
     configure_logging(logging_settings=LoggingSettings(level="INFO", format="json"))
 

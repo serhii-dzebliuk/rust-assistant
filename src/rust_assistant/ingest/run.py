@@ -5,17 +5,31 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import Optional
 
-from rust_assistant.core.config import get_settings
-from rust_assistant.core.db import build_async_engine, build_session_factory, dispose_engine
+from rust_assistant.core.config import Settings, get_settings
+from rust_assistant.core.db import (
+    build_async_engine,
+    build_session_factory,
+    database_is_ready,
+    dispose_engine,
+)
 from rust_assistant.core.logging import configure_logging
 
-from .persist import persist_ingest_artifacts
-from .pipeline import run_pipeline, run_pipeline_artifacts
+from .persist import IngestPersistenceResult, persist_ingest_artifacts
+from .pipeline import PipelineArtifacts, run_pipeline_artifacts
 
 logger = logging.getLogger(__name__)
+
+SUPPORTED_CRATES = ("std", "book", "cargo", "reference")
+PERSISTABLE_STAGES = ("chunk_dedup", "all")
+
+
+class IngestDatabaseUnavailableError(RuntimeError):
+    """Raised when the ingest CLI cannot reach PostgreSQL."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,57 +42,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pipeline stage to run (default: all)",
     )
     parser.add_argument(
-        "--raw-dir",
-        type=Path,
-        default="data/raw",
-        help="Path to raw data directory (default: data/raw)",
-    )
-    parser.add_argument(
         "--crate",
         type=str,
         action="append",
-        choices=["std", "book", "cargo", "reference"],
+        choices=SUPPORTED_CRATES,
         help="Crate(s) to include (can be specified multiple times, default: all)",
     )
     parser.add_argument(
         "--limit",
         type=int,
-        help="Maximum number of files to process",
+        help="Maximum number of files to process. Requires --no-persist.",
     )
     parser.add_argument(
-        "--parse_output",
-        type=Path,
-        default="data/processed/docs_parsed.jsonl",
-        help="Output path for parsed documents (default: data/processed/docs_parsed.jsonl)",
-    )
-    parser.add_argument(
-        "--clean-output",
-        type=Path,
-        default="data/processed/docs_cleaned.jsonl",
-        help="Output path for cleaned documents (default: data/processed/docs_cleaned.jsonl)",
-    )
-    parser.add_argument(
-        "--dedup-output",
-        type=Path,
-        default="data/processed/docs_deduped.jsonl",
-        help="Output path for deduplicated documents (default: data/processed/docs_deduped.jsonl)",
-    )
-    parser.add_argument(
-        "--chunk-output",
-        type=Path,
-        default="data/chunks/chunks.jsonl",
-        help="Output path for chunks (default: data/chunks/chunks.jsonl)",
-    )
-    parser.add_argument(
-        "--chunk-dedup-output",
-        type=Path,
-        default="data/chunks/chunks_deduped.jsonl",
-        help="Output path for deduplicated chunks (default: data/chunks/chunks_deduped.jsonl)",
-    )
-    parser.add_argument(
-        "--persist-postgres",
+        "--no-persist",
         action="store_true",
-        help="Persist deduplicated documents and chunks to PostgreSQL after the pipeline run",
+        help="Run the pipeline without replacing PostgreSQL ingest data",
     )
     parser.add_argument(
         "--verbose",
@@ -89,108 +67,138 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _log_stage_summary(stage: str, result_count: int, args: argparse.Namespace) -> None:
+def _resolve_raw_docs_dir(settings: Settings, parser: argparse.ArgumentParser) -> Path:
+    """Resolve and validate the raw Rust documentation directory for ingest."""
+    raw_docs_dir = settings.ingest.raw_docs_dir
+    if raw_docs_dir is None:
+        parser.error("RUST_DOCS_RAW_DIR must be configured before running ingest")
+
+    resolved = raw_docs_dir.expanduser().resolve()
+    if not resolved.exists():
+        parser.error(f"RUST_DOCS_RAW_DIR does not exist: {resolved}")
+    if not resolved.is_dir():
+        parser.error(f"RUST_DOCS_RAW_DIR must point to a directory: {resolved}")
+    return resolved
+
+
+def _selected_crates(args: argparse.Namespace) -> list[str]:
+    """Return the crate scope selected for this ingest run."""
+    return list(dict.fromkeys(args.crate or SUPPORTED_CRATES))
+
+
+def _log_stage_summary(stage: str, artifacts: PipelineArtifacts) -> None:
     """Log a concise summary for the completed ingest stage."""
+    logger.info("Discovered files: %s", len(artifacts.discovered_files))
     if stage == "discover":
-        logger.info("Discovered files: %s", result_count)
         return
 
+    logger.info("Parsed documents: %s", len(artifacts.parsed_docs))
     if stage == "parse":
-        logger.info("Parsed documents: %s", result_count)
-        logger.info("Saved parsed docs to: %s", args.parse_output)
         return
 
+    logger.info("Cleaned documents: %s", len(artifacts.cleaned_docs))
     if stage == "clean":
-        logger.info("Cleaned documents: %s", result_count)
-        logger.info("Saved parsed docs to: %s", args.parse_output)
-        logger.info("Saved cleaned docs to: %s", args.clean_output)
         return
 
+    logger.info("Deduplicated documents: %s", len(artifacts.deduped_docs))
     if stage == "dedup":
-        logger.info("Deduplicated documents: %s", result_count)
-        logger.info("Saved parsed docs to: %s", args.parse_output)
-        logger.info("Saved cleaned docs to: %s", args.clean_output)
-        logger.info("Saved deduplicated docs to: %s", args.dedup_output)
         return
 
+    logger.info("Generated chunks: %s", len(artifacts.chunks))
     if stage == "chunk":
-        logger.info("Generated chunks: %s", result_count)
-        logger.info("Saved parsed docs to: %s", args.parse_output)
-        logger.info("Saved cleaned docs to: %s", args.clean_output)
-        logger.info("Saved deduplicated docs to: %s", args.dedup_output)
-        logger.info("Saved chunks to: %s", args.chunk_output)
         return
 
-    logger.info("Deduplicated chunks: %s", result_count)
-    logger.info("Saved parsed docs to: %s", args.parse_output)
-    logger.info("Saved cleaned docs to: %s", args.clean_output)
-    logger.info("Saved deduplicated docs to: %s", args.dedup_output)
-    logger.info("Saved chunks to: %s", args.chunk_output)
-    logger.info("Saved deduplicated chunks to: %s", args.chunk_dedup_output)
+    logger.info("Deduplicated chunks: %s", len(artifacts.deduped_chunks))
 
 
-def main() -> int:
+def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Validate CLI combinations that are unsafe for PostgreSQL replacement."""
+    persist = not args.no_persist
+    if persist and args.stage not in PERSISTABLE_STAGES:
+        parser.error("PostgreSQL persistence requires --stage chunk_dedup or --stage all")
+    if persist and args.limit is not None:
+        parser.error(
+            "--limit is only allowed with --no-persist to avoid replacing full data with a sample"
+        )
+
+
+async def _persist_after_pipeline(
+    *,
+    settings: Settings,
+    artifacts: PipelineArtifacts,
+    selected_crates: Sequence[str],
+) -> IngestPersistenceResult:
+    """Persist completed pipeline artifacts using one async database lifecycle."""
+    db_engine = build_async_engine(settings.postgres)
+    session_factory = build_session_factory(db_engine)
+    try:
+        if not await database_is_ready(session_factory):
+            raise IngestDatabaseUnavailableError(
+                "DATABASE_URL must point to a reachable PostgreSQL database"
+            )
+        return await persist_ingest_artifacts(
+            artifacts=artifacts,
+            session_factory=session_factory,
+            replace_crates=selected_crates,
+        )
+    finally:
+        await dispose_engine(db_engine)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
     """Run ingest pipeline from command line."""
     parser = build_parser()
-    args = parser.parse_args()
-
-    if args.persist_postgres and args.stage not in {"chunk_dedup", "all"}:
-        parser.error("--persist-postgres currently requires --stage chunk_dedup or --stage all")
+    args = parser.parse_args(argv)
+    _validate_args(args, parser)
 
     settings = get_settings()
     logging_settings = settings.logging
     if args.verbose:
         logging_settings = replace(logging_settings, level="DEBUG")
     configure_logging(logging_settings=logging_settings)
-    logger.info("Starting ingest pipeline stage=%s", args.stage)
 
-    if args.persist_postgres:
-        artifacts = run_pipeline_artifacts(
-            stage=args.stage,
-            raw_data_dir=args.raw_dir,
-            crates=args.crate,
-            limit=args.limit,
-            parsing_output=args.parse_output,
-            clean_output=args.clean_output,
-            dedup_output=args.dedup_output,
-            chunk_output=args.chunk_output,
-            chunk_dedup_output=args.chunk_dedup_output,
-        )
-        _log_stage_summary(args.stage, len(artifacts.deduped_chunks), args)
-
-        db_engine = build_async_engine(settings.postgres)
-        session_factory = build_session_factory(db_engine)
-        try:
-            persistence_result = asyncio.run(
-                persist_ingest_artifacts(
-                    artifacts=artifacts,
-                    session_factory=session_factory,
-                )
-            )
-        finally:
-            asyncio.run(dispose_engine(db_engine))
-
-        logger.info(
-            "Persisted ingest status=%s docs=%s chunks=%s",
-            persistence_result.status,
-            persistence_result.document_count,
-            persistence_result.chunk_count,
-        )
-        return 0
-
-    result = run_pipeline(
-        stage=args.stage,
-        raw_data_dir=args.raw_dir,
-        crates=args.crate,
-        limit=args.limit,
-        parsing_output=args.parse_output,
-        clean_output=args.clean_output,
-        dedup_output=args.dedup_output,
-        chunk_output=args.chunk_output,
-        chunk_dedup_output=args.chunk_dedup_output,
+    raw_docs_dir = _resolve_raw_docs_dir(settings, parser)
+    selected_crates = _selected_crates(args)
+    persist = not args.no_persist
+    logger.info(
+        "Starting ingest pipeline stage=%s crates=%s persist_postgres=%s",
+        args.stage,
+        selected_crates,
+        persist,
     )
 
-    _log_stage_summary(args.stage, len(result), args)
+    artifacts = run_pipeline_artifacts(
+        raw_data_dir=raw_docs_dir,
+        stage=args.stage,
+        crates=selected_crates,
+        limit=args.limit,
+        max_chunk_chars=settings.ingest.max_chunk_chars,
+        min_chunk_chars=settings.ingest.min_chunk_chars,
+    )
+    _log_stage_summary(args.stage, artifacts)
+
+    if not persist:
+        return 0
+
+    try:
+        persistence_result = asyncio.run(
+            _persist_after_pipeline(
+                settings=settings,
+                artifacts=artifacts,
+                selected_crates=selected_crates,
+            )
+        )
+    except IngestDatabaseUnavailableError as exc:
+        parser.error(str(exc))
+
+    logger.info(
+        "Persisted ingest status=%s docs=%s chunks=%s deleted_docs=%s deleted_chunks=%s",
+        persistence_result.status,
+        persistence_result.document_count,
+        persistence_result.chunk_count,
+        persistence_result.deleted_document_count,
+        persistence_result.deleted_chunk_count,
+    )
     return 0
 
 

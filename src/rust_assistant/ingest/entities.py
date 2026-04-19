@@ -67,7 +67,7 @@ class Document(BaseModel):
     title: str
     source_path: str
     text: str
-    structured_blocks: list[StructuredBlock] = Field(default_factory=list)
+    structured_blocks: list[StructuredBlock] = Field(default_factory=list[StructuredBlock])
     metadata: DocumentMetadata
 
     @staticmethod
@@ -133,17 +133,6 @@ class Chunk(BaseModel):
 
         if self.text_hash is None:
             self.text_hash = self.compute_text_hash(self.text)
-
-    def to_jsonl(self) -> str:
-        """Serialize the chunk to a JSONL line."""
-
-        return self.model_dump_json()
-
-    @classmethod
-    def from_jsonl(cls, line: str) -> Chunk:
-        """Deserialize a chunk from a JSONL line."""
-
-        return cls.model_validate_json(line)
 
 
 DocumentList = list[Document]

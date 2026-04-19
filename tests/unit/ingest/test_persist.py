@@ -12,8 +12,16 @@ pytestmark = pytest.mark.unit
 
 
 class FakeSession:
-    async def commit(self):
+    def begin(self):
+        return FakeTransactionContext()
+
+
+class FakeTransactionContext:
+    async def __aenter__(self):
         return None
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
 
 
 class FakeSessionContext:
@@ -30,6 +38,13 @@ class FakeSessionFactory:
 
 
 class FakeDocumentRepository:
+    def __init__(self):
+        self.deleted_crates = None
+
+    async def delete_by_crates(self, _session, crate_values):
+        self.deleted_crates = list(crate_values)
+        return (3, 9)
+
     async def upsert_documents(self, _session, _documents):
         record = DocumentRecord(
             source_path="std/keyword.async.html",
@@ -105,9 +120,10 @@ def _chunk() -> Chunk:
 
 def test_persist_ingest_artifacts_persists_documents_and_chunks_to_postgres(monkeypatch):
     chunk_repository = FakeChunkRepository()
+    document_repository = FakeDocumentRepository()
     monkeypatch.setattr(
         "rust_assistant.ingest.persist.DocumentRepository",
-        lambda: FakeDocumentRepository(),
+        lambda: document_repository,
     )
     monkeypatch.setattr(
         "rust_assistant.ingest.persist.ChunkRepository",
@@ -121,11 +137,66 @@ def test_persist_ingest_artifacts_persists_documents_and_chunks_to_postgres(monk
                 deduped_chunks=[_chunk()],
             ),
             session_factory=FakeSessionFactory(),
+            replace_crates=["std"],
         )
     )
 
     assert result.status == "completed"
     assert result.document_count == 1
     assert result.chunk_count == 1
+    assert result.deleted_document_count == 3
+    assert result.deleted_chunk_count == 9
+    assert document_repository.deleted_crates == ["std"]
     assert chunk_repository.chunks == [_chunk()]
     assert "std/keyword.async.html" in chunk_repository.documents_by_source_path
+
+
+def test_persist_ingest_artifacts_refuses_empty_replace_payload():
+    with pytest.raises(ValueError, match="zero documents"):
+        asyncio.run(
+            persist_ingest_artifacts(
+                artifacts=PipelineArtifacts(),
+                session_factory=FakeSessionFactory(),
+                replace_crates=["std"],
+            )
+        )
+
+
+def test_persist_ingest_artifacts_refuses_documents_without_chunks():
+    chunk = _chunk().model_copy(
+        update={
+            "metadata": _chunk().metadata.model_copy(update={"doc_source_path": "std/other.html"})
+        }
+    )
+
+    with pytest.raises(ValueError, match="documents without chunks"):
+        asyncio.run(
+            persist_ingest_artifacts(
+                artifacts=PipelineArtifacts(
+                    deduped_docs=[_document()],
+                    deduped_chunks=[chunk],
+                ),
+                session_factory=FakeSessionFactory(),
+                replace_crates=["std"],
+            )
+        )
+
+
+def test_persist_ingest_artifacts_refuses_chunks_without_matching_documents():
+    chunk = _chunk().model_copy(
+        update={
+            "metadata": _chunk().metadata.model_copy(update={"doc_source_path": "std/missing.html"})
+        }
+    )
+
+    with pytest.raises(ValueError, match="chunks without matching documents"):
+        asyncio.run(
+            persist_ingest_artifacts(
+                artifacts=PipelineArtifacts(
+                    deduped_docs=[_document()],
+                    deduped_chunks=[_chunk(), chunk],
+                ),
+                session_factory=FakeSessionFactory(),
+                replace_crates=["std"],
+            )
+        )

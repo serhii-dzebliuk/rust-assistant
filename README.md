@@ -54,7 +54,6 @@ For the full system design, see [`docs/architecture.md`](./docs/architecture.md)
 ```text
 src/rust_assistant/  FastAPI application code
 tests/         Unit and integration tests
-scripts/       Operational and maintenance scripts
 docker/        Dockerfiles and container assets
 docs/          Project documentation
 notebooks/     Exploratory work only
@@ -78,10 +77,12 @@ Basic flow:
 1. Copy `.env.example` to `.env`
 2. Fill in required configuration values
 3. Start the stack with Docker Compose
-4. Run or trigger the ingest pipeline
+4. Run `rust-assistant-ingest` after `RUST_DOCS_RAW_DIR` is configured
 5. Send requests to the backend through Caddy
 
-Exact commands and operational details can be documented in `scripts/` or expanded later in this README once the deployment workflow is finalized.
+The backend is served through `rust_assistant.main`. The ingest CLI is exposed as the
+`rust-assistant-ingest` console command, with `python -m rust_assistant.ingest.run` as a
+fallback.
 
 ## Configuration
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
 from rust_assistant.ingest.entities import Document
 from rust_assistant.ingest.parsing.page_parser import PageParser
@@ -18,8 +18,7 @@ logger = logging.getLogger(__name__)
 
 def parse(
     html_files: list[Path],
-    raw_data_dir: Union[Path, str] = "data/raw",
-    output_file: Optional[Union[Path, str]] = None,
+    raw_data_dir: Union[Path, str],
 ) -> list[Document]:
     """
     Parse discovered HTML files into `Document` instances.
@@ -27,7 +26,6 @@ def parse(
     Args:
         html_files: List of HTML file paths from discovery stage.
         raw_data_dir: Root directory used to build relative source paths.
-        output_file: Optional JSONL path to persist parsed documents.
 
     Returns:
         List of successfully parsed documents.
@@ -47,13 +45,5 @@ def parse(
         docs.append(doc)
 
     logger.info("Parsed %s documents (%s failed)", len(docs), failed)
-
-    if output_file is not None:
-        output_path = Path(output_file)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w", encoding="utf-8") as handle:
-            for doc in docs:
-                handle.write(doc.model_dump_json() + "\n")
-        logger.info("Saved parsed documents to %s", output_path)
 
     return docs

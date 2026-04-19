@@ -223,8 +223,10 @@ class PageParser:
             soup: Parsed HTML document.
 
         Returns:
-            `ItemType` for std rustdoc pages, otherwise `None`.
+            `ItemType` for parsed documents.
         """
+        if crate in {Crate.BOOK, Crate.CARGO, Crate.REFERENCE}:
+            return ItemType.PAGE
         if crate != Crate.STD:
             return None
 
@@ -285,8 +287,10 @@ class PageParser:
         item_name = title.rsplit("::", 1)[-1]
         if item_name.endswith("!"):
             return ItemType.MACRO
-        if "::keyword::" in title_l or "::primitive::" in title_l:
-            return ItemType.UNKNOWN
+        if "::keyword::" in title_l:
+            return ItemType.KEYWORD
+        if "::primitive::" in title_l:
+            return ItemType.PRIMITIVE
         return None
 
     def _resolve_rust_version(self, crate: Crate) -> Optional[str]:

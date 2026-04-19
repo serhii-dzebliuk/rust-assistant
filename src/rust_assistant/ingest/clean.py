@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
-from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from rust_assistant.ingest.entities import BlockType, Document, StructuredBlock
 from rust_assistant.schemas.enums import Crate
@@ -132,14 +131,12 @@ class DocumentCleaner:
 
 def clean_documents(
     docs: list[Document],
-    output_file: Optional[Union[Path, str]] = None,
 ) -> list[Document]:
     """
     Clean a list of parsed documents.
 
     Args:
         docs: Parsed documents from stage 1.3.
-        output_file: Optional JSONL path for cleaned output.
 
     Returns:
         List of cleaned documents.
@@ -165,13 +162,5 @@ def clean_documents(
         len(cleaned),
         dropped_short,
     )
-
-    if output_file is not None:
-        out = Path(output_file)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        with out.open("w", encoding="utf-8") as handle:
-            for doc in cleaned:
-                handle.write(doc.model_dump_json() + "\n")
-        logger.info("Saved cleaned documents to %s", out)
 
     return cleaned

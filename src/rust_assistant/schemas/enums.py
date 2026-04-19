@@ -18,6 +18,9 @@ class ItemType(str, Enum):
     ENUM = "enum"
     CONSTANT = "constant"
     TYPE_ALIAS = "type"
+    KEYWORD = "keyword"
+    PRIMITIVE = "primitive"
+    PAGE = "page"
     UNKNOWN = "unknown"
 
 

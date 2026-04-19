@@ -10,8 +10,6 @@ import hashlib
 import logging
 import re
 from collections import defaultdict
-from pathlib import Path
-from typing import Optional, Union
 
 from rust_assistant.ingest.entities import Document
 
@@ -94,14 +92,12 @@ class DocumentDeduplicator:
 
 def deduplicate_documents(
     docs: list[Document],
-    output_file: Optional[Union[Path, str]] = None,
 ) -> list[Document]:
     """
-    Deduplicate cleaned documents and optionally persist JSONL output.
+    Deduplicate cleaned documents in memory.
 
     Args:
         docs: Cleaned documents from stage 1.4.
-        output_file: Optional JSONL output path for deduplicated docs.
 
     Returns:
         Deduplicated document list.
@@ -115,13 +111,5 @@ def deduplicate_documents(
     deduplicator = DocumentDeduplicator()
     deduped = deduplicator.deduplicate(docs)
     logger.info("Dedup stage complete: kept %s docs", len(deduped))
-
-    if output_file is not None:
-        out = Path(output_file)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        with out.open("w", encoding="utf-8") as handle:
-            for doc in deduped:
-                handle.write(doc.model_dump_json() + "\n")
-        logger.info("Saved deduplicated documents to %s", out)
 
     return deduped

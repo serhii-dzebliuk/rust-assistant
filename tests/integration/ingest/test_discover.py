@@ -100,6 +100,40 @@ def test_discover_skips_std_all_items_index(tmp_path: Path):
     assert skipped_doc not in files
 
 
+def test_discover_skips_cargo_changelog(tmp_path: Path):
+    raw_dir = tmp_path / "raw"
+    cargo_dir = raw_dir / "cargo"
+    cargo_dir.mkdir(parents=True)
+
+    skipped_doc = cargo_dir / "CHANGELOG.html"
+    skipped_doc.write_text(
+        """<!DOCTYPE html>
+<html>
+<head><title>Changelog - The Cargo Book</title></head>
+<body><main><h1>Changelog</h1><p>Added Changed Fixed</p></main></body>
+</html>
+""",
+        encoding="utf-8",
+    )
+    kept_doc = cargo_dir / "index.html"
+    kept_doc.write_text(
+        """<!DOCTYPE html>
+<html>
+<head><title>The Cargo Book</title></head>
+<body><main><h1>The Cargo Book</h1><p>Useful Cargo docs.</p></main></body>
+</html>
+""",
+        encoding="utf-8",
+    )
+
+    discoverer = DocumentDiscoverer(raw_dir)
+
+    files = discoverer.discover(crates=[Crate.CARGO])
+
+    assert kept_doc in files
+    assert skipped_doc not in files
+
+
 def test_discover_skips_book_redirect_files(tmp_path: Path):
     raw_dir = tmp_path / "raw"
     book_dir = raw_dir / "book"

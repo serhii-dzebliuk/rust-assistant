@@ -1,5 +1,5 @@
 """
-Discover HTML documentation files from `data/raw`.
+Discover HTML documentation files from a configured raw documentation directory.
 
 This module implements ingest stage 1.2.
 """
@@ -34,6 +34,7 @@ class DocumentDiscoverer:
 
     BOOK_EXCLUDE_FILES = {"README.html", "SUMMARY.html", "title-page.html"}
     STD_EXCLUDE_FILES = {"all.html"}
+    CARGO_EXCLUDE_FILES = {"CHANGELOG.html"}
 
     EXCLUDE_PATTERNS = {
         "*.js",
@@ -113,7 +114,7 @@ class DocumentDiscoverer:
             List of absolute HTML paths selected for parsing.
 
         Example:
-            >>> discoverer = DocumentDiscoverer("data/raw")
+            >>> discoverer = DocumentDiscoverer(raw_data_dir)
             >>> files = discoverer.discover(crates=[Crate.STD], limit=100)
             >>> len(files) <= 100
             True
@@ -149,7 +150,7 @@ class DocumentDiscoverer:
         Discover crate HTML files by traversing a directory tree.
 
         Args:
-            directory: Crate root directory under `data/raw`.
+            directory: Crate root directory under the configured raw docs root.
             crate: Crate identifier for crate-specific rules.
 
         Returns:
@@ -181,6 +182,8 @@ class DocumentDiscoverer:
         if not path.is_file():
             return True
         if crate == Crate.BOOK and path.name in self.BOOK_EXCLUDE_FILES:
+            return True
+        if crate == Crate.CARGO and path.name in self.CARGO_EXCLUDE_FILES:
             return True
         if crate == Crate.STD and path.name in self.STD_EXCLUDE_FILES:
             return True
@@ -310,7 +313,7 @@ class DocumentDiscoverer:
 
 
 def discover_documents(
-    raw_data_dir: Union[Path, str] = "data/raw",
+    raw_data_dir: Union[Path, str],
     crates: Optional[list[str]] = None,
     limit: Optional[int] = None,
 ) -> list[Path]:

@@ -17,6 +17,9 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.postgres.echo is False
     assert settings.postgres.pool_size == 10
     assert settings.postgres.max_overflow == 10
+    assert settings.ingest.raw_docs_dir is None
+    assert settings.ingest.max_chunk_chars == 1400
+    assert settings.ingest.min_chunk_chars == 180
 
 
 def test_build_settings_parses_explicit_values():
@@ -42,6 +45,9 @@ def test_build_settings_parses_explicit_values():
             "LLM_MODEL": "gpt-5",
             "EMBEDDING_PROVIDER": "openai",
             "EMBEDDING_MODEL": "text-embedding-3-large",
+            "RUST_DOCS_RAW_DIR": "D:\\rust-docs",
+            "INGEST_MAX_CHUNK_CHARS": "1200",
+            "INGEST_MIN_CHUNK_CHARS": "120",
             "PUBLIC_BASE_URL": "https://example.com",
         }
     )
@@ -64,6 +70,9 @@ def test_build_settings_parses_explicit_values():
     assert settings.llm.model == "gpt-5"
     assert settings.llm.embedding_provider == "openai"
     assert settings.llm.embedding_model == "text-embedding-3-large"
+    assert str(settings.ingest.raw_docs_dir) == "D:\\rust-docs"
+    assert settings.ingest.max_chunk_chars == 1200
+    assert settings.ingest.min_chunk_chars == 120
     assert settings.logging.level == "DEBUG"
     assert settings.logging.format == "json"
     assert settings.proxy.public_base_url == "https://example.com"
@@ -77,6 +86,15 @@ def test_build_settings_rejects_invalid_boolean_values():
     else:
         raise AssertionError("Expected build_settings to reject invalid boolean values")
 
+
+def test_build_settings_rejects_min_chunk_chars_above_max():
+    with pytest.raises(ValueError, match="INGEST_MIN_CHUNK_CHARS"):
+        build_settings(
+            {
+                "INGEST_MAX_CHUNK_CHARS": "100",
+                "INGEST_MIN_CHUNK_CHARS": "101",
+            }
+        )
 
 
 def test_get_settings_uses_cache_and_can_be_cleared(monkeypatch):

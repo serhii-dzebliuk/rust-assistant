@@ -72,6 +72,26 @@ def _build_logging_config(level: str, log_format: str) -> dict[str, Any]:
             "handlers": ["default"],
         },
         "loggers": {
+            "sqlalchemy": {
+                "level": "WARNING",
+                "handlers": ["default"],
+                "propagate": False,
+            },
+            "sqlalchemy.engine": {
+                "level": "WARNING",
+                "handlers": ["default"],
+                "propagate": False,
+            },
+            "sqlalchemy.pool": {
+                "level": "WARNING",
+                "handlers": ["default"],
+                "propagate": False,
+            },
+            "asyncpg": {
+                "level": "WARNING",
+                "handlers": ["default"],
+                "propagate": False,
+            },
             "uvicorn": {
                 "level": level,
                 "handlers": ["default"],

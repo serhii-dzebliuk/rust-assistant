@@ -62,7 +62,9 @@ def test_book_hello_cargo_uses_console_fences_and_preserves_inline_commands(
     assert "We can build and run a project in one step using `cargo run`." in doc.text
 
 
-def test_book_parse_preserves_structured_blocks_for_headings_and_code(page_parser, raw_data_dir: Path):
+def test_book_parse_preserves_structured_blocks_for_headings_and_code(
+    page_parser, raw_data_dir: Path
+):
     doc = page_parser.parse_file(raw_data_dir / "book/ch01-03-hello-cargo.html")
 
     assert doc is not None
@@ -76,7 +78,9 @@ def test_book_parse_preserves_structured_blocks_for_headings_and_code(page_parse
         if block.block_type == BlockType.CODE_BLOCK and block.code_language == "console"
     ]
     assert console_blocks
-    assert any("Building and Running a Cargo Project" in block.section_path for block in console_blocks)
+    assert any(
+        "Building and Running a Cargo Project" in block.section_path for block in console_blocks
+    )
 
 
 def test_book_metadata_uses_page_path_and_sets_url_and_version(page_parser, raw_data_dir: Path):
@@ -85,8 +89,9 @@ def test_book_metadata_uses_page_path_and_sets_url_and_version(page_parser, raw_
     doc = page_parser.parse_file(file_path)
     assert doc is not None
 
+    assert doc.source_path == "book/ch01-03-hello-cargo.html"
     assert doc.metadata.item_path == "book::ch01-03-hello-cargo"
-    assert doc.metadata.item_type is None
+    assert doc.metadata.item_type == "page"
     assert doc.metadata.rust_version == "1.85.0"
     assert doc.metadata.url == "https://doc.rust-lang.org/book/ch01-03-hello-cargo.html"
 
@@ -97,6 +102,7 @@ def test_rustdoc_metadata_uses_canonical_item_path_and_version(page_parser, raw_
     doc = page_parser.parse_file(file_path)
     assert doc is not None
 
+    assert doc.source_path == "std/alloc/struct.Layout.html"
     assert doc.metadata.item_path == "std::alloc::Layout"
     assert doc.metadata.item_type == "struct"
     assert doc.metadata.rust_version == "1.91.1"
@@ -115,7 +121,11 @@ def test_rustdoc_detects_trait_module_and_keyword_item_types(page_parser, raw_da
 
     keyword_doc = page_parser.parse_file(raw_data_dir / "std/keyword.async.html")
     assert keyword_doc is not None
-    assert keyword_doc.metadata.item_type == "unknown"
+    assert keyword_doc.metadata.item_type == "keyword"
+
+    primitive_doc = page_parser.parse_file(raw_data_dir / "std/primitive.unit.html")
+    assert primitive_doc is not None
+    assert primitive_doc.metadata.item_type == "primitive"
 
 
 def test_rustdoc_uses_rust_fences_for_rustdoc_code_blocks(page_parser, raw_data_dir: Path):
@@ -175,19 +185,21 @@ def test_cargo_metadata_uses_page_path_sets_url_and_null_item_type(page_parser, 
     assert doc is not None
 
     assert doc.metadata.item_path == "cargo::commands::cargo-build"
-    assert doc.metadata.item_type is None
+    assert doc.metadata.item_type == "page"
     assert doc.metadata.rust_version == "1.91"
     assert doc.metadata.url == "https://doc.rust-lang.org/cargo/commands/cargo-build.html"
 
 
-def test_reference_metadata_uses_page_path_sets_url_and_keeps_version_null(page_parser, raw_data_dir: Path):
+def test_reference_metadata_uses_page_path_sets_url_and_keeps_version_null(
+    page_parser, raw_data_dir: Path
+):
     file_path = raw_data_dir / "reference/destructors.html"
 
     doc = page_parser.parse_file(file_path)
     assert doc is not None
 
     assert doc.metadata.item_path == "reference::destructors"
-    assert doc.metadata.item_type is None
+    assert doc.metadata.item_type == "page"
     assert doc.metadata.rust_version is None
     assert doc.metadata.url == "https://doc.rust-lang.org/reference/destructors.html"
 

@@ -4,15 +4,40 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rust_assistant.ingest.entities import Document
-from rust_assistant.models import DocumentRecord
+from rust_assistant.models import ChunkRecord, DocumentRecord
 
 
 class DocumentRepository:
     """Persist and query canonical documents."""
+
+    async def delete_by_crates(
+        self,
+        session: AsyncSession,
+        crate_values: Sequence[str],
+    ) -> tuple[int, int]:
+        """Delete canonical documents for crates and return document/chunk counts."""
+        if not crate_values:
+            return (0, 0)
+
+        document_count = await session.scalar(
+            select(func.count(DocumentRecord.id)).where(DocumentRecord.crate.in_(crate_values))
+        )
+        chunk_count = await session.scalar(
+            select(func.count(ChunkRecord.id))
+            .join(DocumentRecord)
+            .where(DocumentRecord.crate.in_(crate_values))
+        )
+        await session.execute(
+            delete(DocumentRecord)
+            .where(DocumentRecord.crate.in_(crate_values))
+            .execution_options(synchronize_session=False)
+        )
+        await session.flush()
+        return (int(document_count or 0), int(chunk_count or 0))
 
     async def upsert_documents(
         self,
