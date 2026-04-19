@@ -114,7 +114,11 @@ services:
       - --model-id
       - microsoft/harrier-oss-v1-270m
       - --pooling
-      - last-token
+      - mean
+      - --max-batch-tokens 
+      - "2048"
+      - --max-concurrent-requests 
+      - "8"
 
 networks:
   public:
