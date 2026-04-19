@@ -112,11 +112,9 @@ services:
       - private
     command:
       - --model-id
-      - microsoft/harrier-oss-v1-0.6b
+      - microsoft/harrier-oss-v1-270m
       - --pooling
       - last-token
-      - --max-batch-tokens
-      - "8192"
 
 networks:
   public:
