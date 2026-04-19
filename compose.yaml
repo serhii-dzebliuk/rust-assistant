@@ -31,6 +31,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+      tei:
+        condition: service_healthy
     environment:
       HOST: ${HOST}
       PORT: ${PORT}
