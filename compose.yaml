@@ -99,9 +99,9 @@ services:
     container_name: rust-assistant-tei
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8081:80"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
