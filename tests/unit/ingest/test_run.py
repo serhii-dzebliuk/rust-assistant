@@ -163,6 +163,63 @@ def test_persist_after_pipeline_uses_one_db_lifecycle_and_disposes(monkeypatch):
     ]
 
 
+def test_persist_after_pipeline_uses_embedding_model_token_counter(monkeypatch):
+    settings = build_settings(
+        {
+            "DATABASE_URL": "postgresql+asyncpg://app:secret@db:5432/docs",
+            "EMBEDDING_MODEL": "microsoft/harrier-oss-v1-270m",
+        }
+    )
+    artifacts = PipelineArtifacts()
+    events = []
+
+    class FakeChunkTokenCounter:
+        @classmethod
+        def from_model_name(cls, model_name):
+            events.append(("tokenizer", model_name))
+            return "token-counter"
+
+    async def fake_database_is_ready(_session_factory):
+        events.append("ready")
+        return True
+
+    async def fake_persist_ingest_artifacts(**kwargs):
+        events.append(("persist", kwargs["token_counter"]))
+        return IngestPersistenceResult(status="completed", document_count=1, chunk_count=1)
+
+    async def fake_dispose_engine(_engine):
+        events.append("dispose")
+
+    monkeypatch.setattr("rust_assistant.ingest.run.build_async_engine", lambda _settings: "engine")
+    monkeypatch.setattr(
+        "rust_assistant.ingest.run.build_session_factory",
+        lambda _engine: "sessions",
+    )
+    monkeypatch.setattr("rust_assistant.ingest.run.database_is_ready", fake_database_is_ready)
+    monkeypatch.setattr(
+        "rust_assistant.ingest.run.persist_ingest_artifacts",
+        fake_persist_ingest_artifacts,
+    )
+    monkeypatch.setattr("rust_assistant.ingest.run.dispose_engine", fake_dispose_engine)
+    monkeypatch.setattr("rust_assistant.ingest.run.ChunkTokenCounter", FakeChunkTokenCounter)
+
+    result = asyncio.run(
+        run._persist_after_pipeline(
+            settings=settings,
+            artifacts=artifacts,
+            selected_crates=["std"],
+        )
+    )
+
+    assert result.status == "completed"
+    assert events == [
+        "ready",
+        ("tokenizer", "microsoft/harrier-oss-v1-270m"),
+        ("persist", "token-counter"),
+        "dispose",
+    ]
+
+
 def test_persist_after_pipeline_disposes_when_database_is_not_ready(monkeypatch):
     settings = build_settings({"DATABASE_URL": "postgresql+asyncpg://app:secret@db:5432/docs"})
     events = []

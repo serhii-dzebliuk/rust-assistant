@@ -8,6 +8,7 @@ from typing import Optional
 
 from rust_assistant.core.db import AsyncSessionFactory
 from rust_assistant.ingest.pipeline import PipelineArtifacts
+from rust_assistant.ingest.token_count import ChunkTokenCounter
 from rust_assistant.repositories import ChunkRepository, DocumentRepository
 
 
@@ -43,6 +44,7 @@ async def persist_ingest_artifacts(
     artifacts: PipelineArtifacts,
     session_factory: Optional[AsyncSessionFactory],
     replace_crates: Sequence[str],
+    token_counter: Optional[ChunkTokenCounter] = None,
 ) -> IngestPersistenceResult:
     """Persist ingest artifacts to Postgres with atomic crate-scope replacement."""
     if session_factory is None:
@@ -60,6 +62,9 @@ async def persist_ingest_artifacts(
 
     document_count = len(artifacts.deduped_docs)
     chunk_count = len(artifacts.deduped_chunks)
+    chunks_to_persist = artifacts.deduped_chunks
+    if token_counter is not None:
+        chunks_to_persist = token_counter.with_token_counts(chunks_to_persist)
     deleted_document_count = 0
     deleted_chunk_count = 0
 
@@ -75,7 +80,7 @@ async def persist_ingest_artifacts(
             )
             await chunk_repository.upsert_chunks(
                 session,
-                artifacts.deduped_chunks,
+                chunks_to_persist,
                 documents_by_source_path,
             )
 

@@ -79,6 +79,19 @@ class FakeChunkRepository:
         return records
 
 
+class FakeTokenCounter:
+    def __init__(self, token_count):
+        self.token_count = token_count
+        self.chunks = None
+
+    def with_token_counts(self, chunks):
+        self.chunks = list(chunks)
+        return [
+            chunk.model_copy(update={"token_count": self.token_count})
+            for chunk in chunks
+        ]
+
+
 def _document() -> Document:
     return Document(
         doc_id="transient-doc-id",
@@ -149,6 +162,35 @@ def test_persist_ingest_artifacts_persists_documents_and_chunks_to_postgres(monk
     assert document_repository.deleted_crates == ["std"]
     assert chunk_repository.chunks == [_chunk()]
     assert "std/keyword.async.html" in chunk_repository.documents_by_source_path
+
+
+def test_persist_ingest_artifacts_counts_chunk_tokens_before_postgres_upsert(monkeypatch):
+    chunk_repository = FakeChunkRepository()
+    document_repository = FakeDocumentRepository()
+    token_counter = FakeTokenCounter(token_count=4)
+    monkeypatch.setattr(
+        "rust_assistant.ingest.persist.DocumentRepository",
+        lambda: document_repository,
+    )
+    monkeypatch.setattr(
+        "rust_assistant.ingest.persist.ChunkRepository",
+        lambda: chunk_repository,
+    )
+
+    asyncio.run(
+        persist_ingest_artifacts(
+            artifacts=PipelineArtifacts(
+                deduped_docs=[_document()],
+                deduped_chunks=[_chunk()],
+            ),
+            session_factory=FakeSessionFactory(),
+            replace_crates=["std"],
+            token_counter=token_counter,
+        )
+    )
+
+    assert token_counter.chunks == [_chunk()]
+    assert chunk_repository.chunks[0].token_count == 4
 
 
 def test_persist_ingest_artifacts_refuses_empty_replace_payload():

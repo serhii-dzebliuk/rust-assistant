@@ -55,7 +55,7 @@ class ChunkRepository:
 
             record.text = chunk.text
             record.hash = chunk.text_hash or Chunk.compute_text_hash(chunk.text)
-            record.token_count = None
+            record.token_count = chunk.token_count
             record.section_title = metadata.section
             record.section_anchor = metadata.anchor
             record.section_path = metadata.section_path

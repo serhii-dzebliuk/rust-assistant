@@ -21,6 +21,7 @@ from rust_assistant.core.logging import configure_logging
 
 from .persist import IngestPersistenceResult, persist_ingest_artifacts
 from .pipeline import PipelineArtifacts, run_pipeline_artifacts
+from .token_count import ChunkTokenCounter
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,17 @@ def _validate_args(args: argparse.Namespace, parser: argparse.ArgumentParser) ->
         )
 
 
+def _build_chunk_token_counter(settings: Settings) -> Optional[ChunkTokenCounter]:
+    """Build a token counter when an embedding model is configured."""
+    embedding_model = settings.embedding.model
+    if embedding_model is None:
+        logger.warning(
+            "EMBEDDING_MODEL is not configured; chunk token_count will be stored as NULL"
+        )
+        return None
+    return ChunkTokenCounter.from_model_name(embedding_model)
+
+
 async def _persist_after_pipeline(
     *,
     settings: Settings,
@@ -136,10 +148,12 @@ async def _persist_after_pipeline(
             raise IngestDatabaseUnavailableError(
                 "DATABASE_URL must point to a reachable PostgreSQL database"
             )
+        token_counter = _build_chunk_token_counter(settings)
         return await persist_ingest_artifacts(
             artifacts=artifacts,
             session_factory=session_factory,
             replace_crates=selected_crates,
+            token_counter=token_counter,
         )
     finally:
         await dispose_engine(db_engine)

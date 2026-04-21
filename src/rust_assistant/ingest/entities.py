@@ -104,6 +104,7 @@ class Chunk(BaseModel):
     text: str
     metadata: ChunkMetadata
     text_hash: Optional[str] = None
+    token_count: Optional[int] = None
 
     @staticmethod
     def generate_id(doc_id: str, chunk_index: int) -> str:

@@ -49,6 +49,9 @@ services:
       LLM_MODEL: ${LLM_MODEL}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      POOLING: ${POOLING}
+      MAX_BATCH_TOKENS: ${MAX_BATCH_TOKENS}
+      MAX_CONCURRENT_REQUESTS: ${MAX_CONCURRENT_REQUESTS}
       LOG_LEVEL: ${LOG_LEVEL}
       LOG_FORMAT: ${LOG_FORMAT}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
@@ -112,13 +115,13 @@ services:
       - private
     command:
       - --model-id
-      - microsoft/harrier-oss-v1-270m
+      - "${EMBEDDING_MODEL}"
       - --pooling
-      - mean
-      - --max-batch-tokens 
-      - "2048"
-      - --max-concurrent-requests 
-      - "8"
+      - "${POOLING}"
+      - --max-batch-tokens
+      - "${MAX_BATCH_TOKENS}"
+      - --max-concurrent-requests
+      - "${MAX_CONCURRENT_REQUESTS}"
 
 networks:
   public:
@@ -131,4 +134,3 @@ volumes:
   postgres_data:
   qdrant_data:
   tei_data:
-

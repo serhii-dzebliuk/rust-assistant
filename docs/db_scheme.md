@@ -110,8 +110,8 @@ Columns:
   - maps from the ingest entity field currently named `text_hash`
   - example: `4649b0ead394e8d62b96b728619526354aaf7195761f64a2e841bbde6979e73d`
 - `token_count`: `INTEGER NULL`
-  - chunk token count
-  - nullable because the current ingest pipeline does not compute token counts yet
+  - chunk token count computed with the configured embedding model tokenizer
+  - nullable for older rows or ingest runs where `EMBEDDING_MODEL` is not configured
   - example: `284`
 - `section_title`: `TEXT NULL`
   - section title that contains the chunk

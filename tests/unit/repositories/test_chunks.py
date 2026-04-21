@@ -62,6 +62,7 @@ def _chunk() -> Chunk:
             doc_source_path="std/keyword.async.html",
         ),
         text_hash=None,
+        token_count=9,
     )
 
 
@@ -84,7 +85,7 @@ def test_upsert_chunks_maps_ingest_chunk_to_new_schema_and_returns_ordered_recor
     assert record.document_id == 7
     assert record.text == "Returns a Future instead of blocking the current thread."
     assert record.hash == Chunk.compute_text_hash(record.text)
-    assert record.token_count is None
+    assert record.token_count == 9
     assert record.section_title == "Keyword async"
     assert record.section_anchor == "keyword.async"
     assert record.section_path == ["std::keyword::async", "Keyword async"]

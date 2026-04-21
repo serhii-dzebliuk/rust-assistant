@@ -23,6 +23,7 @@ class Settings:
     postgres: PostgresSettings
     qdrant: QdrantSettings
     llm: LLMSettings
+    embedding: EmbeddingSettings
     ingest: IngestSettings
     logging: LoggingSettings
     proxy: ProxySettings
@@ -68,12 +69,21 @@ class QdrantSettings:
 
 @dataclass(slots=True, frozen=True)
 class LLMSettings:
-    """LLM and embedding provider settings."""
+    """LLM provider settings."""
 
     provider: Optional[str]
     model: Optional[str]
-    embedding_provider: Optional[str]
-    embedding_model: Optional[str]
+
+
+@dataclass(slots=True, frozen=True)
+class EmbeddingSettings:
+    """Embedding model and serving settings."""
+
+    provider: Optional[str]
+    model: Optional[str]
+    pooling: str
+    max_batch_tokens: int
+    max_concurrent_requests: int
 
 
 @dataclass(slots=True, frozen=True)
@@ -125,8 +135,13 @@ def build_settings(env: Mapping[str, str]) -> Settings:
     llm = LLMSettings(
         provider=_read_optional_str(env, "LLM_PROVIDER"),
         model=_read_optional_str(env, "LLM_MODEL"),
-        embedding_provider=_read_optional_str(env, "EMBEDDING_PROVIDER"),
-        embedding_model=_read_optional_str(env, "EMBEDDING_MODEL"),
+    )
+    embedding = EmbeddingSettings(
+        provider=_read_optional_str(env, "EMBEDDING_PROVIDER"),
+        model=_read_optional_str(env, "EMBEDDING_MODEL"),
+        pooling=_read_str(env, "POOLING", default="mean"),
+        max_batch_tokens=_read_int(env, "MAX_BATCH_TOKENS", default=4096),
+        max_concurrent_requests=_read_int(env, "MAX_CONCURRENT_REQUESTS", default=8),
     )
     ingest = IngestSettings(
         raw_docs_dir=_read_optional_path(env, "RUST_DOCS_RAW_DIR"),
@@ -148,6 +163,7 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         postgres=postgres,
         qdrant=qdrant,
         llm=llm,
+        embedding=embedding,
         ingest=ingest,
         logging=logging,
         proxy=proxy,

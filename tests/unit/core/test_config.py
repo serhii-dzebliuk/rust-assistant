@@ -17,6 +17,11 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.postgres.echo is False
     assert settings.postgres.pool_size == 10
     assert settings.postgres.max_overflow == 10
+    assert settings.embedding.provider is None
+    assert settings.embedding.model is None
+    assert settings.embedding.pooling == "mean"
+    assert settings.embedding.max_batch_tokens == 4096
+    assert settings.embedding.max_concurrent_requests == 8
     assert settings.ingest.raw_docs_dir is None
     assert settings.ingest.max_chunk_chars == 1400
     assert settings.ingest.min_chunk_chars == 180
@@ -43,8 +48,11 @@ def test_build_settings_parses_explicit_values():
             "QDRANT_URL": "http://qdrant:6333",
             "LLM_PROVIDER": "openai",
             "LLM_MODEL": "gpt-5",
-            "EMBEDDING_PROVIDER": "openai",
-            "EMBEDDING_MODEL": "text-embedding-3-large",
+            "EMBEDDING_PROVIDER": "tei",
+            "EMBEDDING_MODEL": "microsoft/harrier-oss-v1-270m",
+            "POOLING": "mean",
+            "MAX_BATCH_TOKENS": "8192",
+            "MAX_CONCURRENT_REQUESTS": "12",
             "RUST_DOCS_RAW_DIR": "D:\\rust-docs",
             "INGEST_MAX_CHUNK_CHARS": "1200",
             "INGEST_MIN_CHUNK_CHARS": "120",
@@ -68,8 +76,11 @@ def test_build_settings_parses_explicit_values():
     assert settings.qdrant.url == "http://qdrant:6333"
     assert settings.llm.provider == "openai"
     assert settings.llm.model == "gpt-5"
-    assert settings.llm.embedding_provider == "openai"
-    assert settings.llm.embedding_model == "text-embedding-3-large"
+    assert settings.embedding.provider == "tei"
+    assert settings.embedding.model == "microsoft/harrier-oss-v1-270m"
+    assert settings.embedding.pooling == "mean"
+    assert settings.embedding.max_batch_tokens == 8192
+    assert settings.embedding.max_concurrent_requests == 12
     assert str(settings.ingest.raw_docs_dir) == "D:\\rust-docs"
     assert settings.ingest.max_chunk_chars == 1200
     assert settings.ingest.min_chunk_chars == 120
