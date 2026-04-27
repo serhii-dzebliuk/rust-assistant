@@ -40,4 +40,4 @@ RUN python -m pip install --upgrade pip \
 
 USER appuser
 
-CMD ["sh", "-c", "exec python -m uvicorn rust_assistant.main:app --host \"$HOST\" --port \"$PORT\""]
+CMD ["sh", "-c", "exec python -m uvicorn rust_assistant.asgi:app --host \"$HOST\" --port \"$PORT\""]

@@ -1,4 +1,4 @@
-# Database Schema
+﻿# Database Schema
 
 ## Purpose
 
@@ -20,7 +20,8 @@ erDiagram
     DOCUMENTS ||--o{ CHUNKS : contains
 
     DOCUMENTS {
-        bigint id PK
+        bigint pk PK
+        uuid id UK
         text crate
         text title
         text text_content
@@ -33,8 +34,9 @@ erDiagram
     }
 
     CHUNKS {
-        bigint id PK
-        bigint document_id FK
+        bigint pk PK
+        uuid id UK
+        bigint document_pk FK
         text text
         text hash
         int token_count
@@ -52,9 +54,12 @@ erDiagram
 Each row represents one parsed local HTML source file.
 
 Columns:
-- `id`: `BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY`
-  - internal numeric document identifier
+- `pk`: `BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY`
+  - internal persistence key used only for relational joins and cascade delete
   - example: `1`
+- `id`: `UUID NOT NULL UNIQUE`
+  - stable business document identifier derived in the application layer
+  - example: `3e82d3a1-92f1-5ca8-a5d8-aee5704597c8`
 - `crate`: `TEXT NOT NULL`
   - documentation set name
   - example: `std`
@@ -86,7 +91,8 @@ Columns:
   - example: `module`, `struct`, `enum`, `trait`, `fn`, `keyword`, `primitive`, `page`, `unknown`
 
 Constraints:
-- `PRIMARY KEY (id)`
+- `PRIMARY KEY (pk)`
+- `UNIQUE (id)`
 - `UNIQUE (source_path)`
 
 ## `chunks`
@@ -94,13 +100,16 @@ Constraints:
 Each row represents one retrieval-ready text span derived from a document.
 
 Columns:
-- `id`: `BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY`
-  - internal numeric chunk identifier
-  - this is also the chunk identifier used by Qdrant/retrieval
+- `pk`: `BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY`
+  - internal persistence key used only for joins and cascade delete
   - example: `42`
-- `document_id`: `BIGINT NOT NULL`
-  - parent document reference
-  - foreign key: `REFERENCES documents(id) ON DELETE CASCADE`
+- `id`: `UUID NOT NULL UNIQUE`
+  - stable business chunk identifier derived in the application layer
+  - this is the chunk identifier stored in Qdrant payloads
+  - example: `b401f1e4-b578-5807-a2f4-74ea9862d304`
+- `document_pk`: `BIGINT NOT NULL`
+  - parent document persistence reference
+  - foreign key: `REFERENCES documents(pk) ON DELETE CASCADE`
   - example: `1`
 - `text`: `TEXT NOT NULL`
   - chunk text for embeddings, retrieval, and LLM context
@@ -133,20 +142,20 @@ Columns:
   - example: `2928`
 
 Constraints:
-- `PRIMARY KEY (id)`
-- `FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE`
-- `UNIQUE (document_id, chunk_index)`
+- `PRIMARY KEY (pk)`
+- `UNIQUE (id)`
+- `FOREIGN KEY (document_pk) REFERENCES documents(pk) ON DELETE CASCADE`
+- `UNIQUE (document_pk, chunk_index)`
 
 ## Naming Alignment
 
-Persistence should map current ingest-domain names to database names:
+Persistence should map current domain names to database names:
 
-- ingest `Document.doc_id` is transient and is not stored in `documents`
-- ingest `Chunk.chunk_id` is transient and is not stored in `chunks`
 - ingest `Document.structured_blocks` maps to `documents.parsed_content`
 - ingest `Chunk.text_hash` maps to `chunks.hash`
-- database `documents.id` is the persisted document identifier
-- database `chunks.id` is the persisted chunk identifier used by Qdrant/retrieval
+- domain `Document.id` maps to business `documents.id`
+- domain `Chunk.id` maps to business `chunks.id`
+- database `documents.pk` and `chunks.pk` remain persistence-only keys
 
 ## Query and Ingest Use
 
@@ -155,14 +164,14 @@ Persistence should map current ingest-domain names to database names:
 1. Parse one local HTML file into a document entity.
 2. Persist document-level fields to `documents`.
 3. Persist derived retrieval chunks to `chunks`.
-4. After PostgreSQL assigns `chunks.id`, upsert vectors to Qdrant using those numeric ids.
+4. After PostgreSQL stores `chunks.id`, upsert vectors to Qdrant using those UUID ids.
 5. Qdrant payload stores only lightweight filter metadata, not canonical text.
 
 ### Query path
 
-1. Qdrant returns numeric `chunks.id` values.
+1. Qdrant returns business `chunks.id` UUID values.
 2. The backend loads canonical chunk rows from `chunks`.
-3. The backend joins `chunks.document_id -> documents.id`.
+3. The backend joins `chunks.document_pk -> documents.pk`.
 4. Retrieved chunk text is assembled into LLM context.
 5. Document metadata provides source attribution and filters.
 
@@ -176,6 +185,20 @@ Qdrant payload should stay minimal and omit `chunks.text`. The intended payload 
 ## Source of Truth
 
 This document is the intended source of truth for:
-- SQLAlchemy ORM models in `src/rust_assistant/models/`
-- repository persistence mapping in `src/rust_assistant/repositories/`
+- SQLAlchemy ORM models in `src/rust_assistant/infrastructure/outbound/sqlalchemy/models.py`
+- repository persistence mapping in `src/rust_assistant/infrastructure/outbound/sqlalchemy/repositories/`
 - Alembic migrations in `alembic/versions/`
+
+## Rollout Notes
+
+When moving an existing environment to UUID business identities:
+
+1. Run `.\.venv\Scripts\alembic.exe upgrade head`.
+2. Run a full ingest rebuild with `python -m rust_assistant ingest`.
+3. Rebuild or resynchronize vector-store state so Qdrant payloads use UUID ids.
+
+Notes:
+- PostgreSQL does not need to be wiped before the migration because the Alembic revision
+  backfills `documents.id` and `chunks.id`.
+- A full reingest is still recommended after migration to guarantee a clean canonical
+  state across PostgreSQL and vector storage.

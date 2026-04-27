@@ -77,12 +77,12 @@ Basic flow:
 1. Copy `.env.example` to `.env`
 2. Fill in required configuration values
 3. Start the stack with Docker Compose
-4. Run `rust-assistant-ingest` after `RUST_DOCS_RAW_DIR` is configured
+4. Run `rust-assistant ingest` after `RUST_DOCS_RAW_DIR` is configured
 5. Send requests to the backend through Caddy
 
-The backend is served through `rust_assistant.main`. The ingest CLI is exposed as the
-`rust-assistant-ingest` console command, with `python -m rust_assistant.ingest.run` as a
-fallback.
+The backend is served through `rust_assistant.asgi:app`. The CLI is exposed as the
+`rust-assistant` console command, with `python -m rust_assistant ingest` as the package
+entrypoint form.
 
 ## Configuration
 

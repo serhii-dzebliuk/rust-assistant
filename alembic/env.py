@@ -1,6 +1,7 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
+import importlib
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -15,9 +16,11 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from rust_assistant import models as _models
-from rust_assistant.core.config import get_settings
-from rust_assistant.core.db import Base
+importlib.import_module("rust_assistant.infrastructure.outbound.sqlalchemy.models")
+get_settings = importlib.import_module("rust_assistant.core.config").get_settings
+Base = importlib.import_module(
+    "rust_assistant.infrastructure.outbound.sqlalchemy.base"
+).Base
 
 config = context.config
 

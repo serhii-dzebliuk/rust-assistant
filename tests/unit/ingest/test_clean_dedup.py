@@ -1,28 +1,31 @@
+﻿from dataclasses import replace
+
 import pytest
 
-from rust_assistant.ingest.clean import clean_documents
-from rust_assistant.ingest.dedup import deduplicate_documents
-from rust_assistant.ingest.entities import BlockType, Document, DocumentMetadata, StructuredBlock
-from rust_assistant.schemas.enums import Crate
+from rust_assistant.domain.entities.documents import Document
+from rust_assistant.domain.enums import Crate
+from rust_assistant.domain.policies.document_cleaning import clean_documents
+from rust_assistant.domain.policies.document_deduplication import (
+    deduplicate_documents,
+)
+from rust_assistant.domain.value_objects.structured_blocks import (
+    BlockType,
+    StructuredBlock,
+)
 
 pytestmark = pytest.mark.unit
 
 
 def _make_doc(source_path: str, text: str, crate: Crate = Crate.STD) -> Document:
     title = source_path.split("/")[-1].replace(".html", "")
-    windows_path = source_path.replace("/", "\\")
-    metadata = DocumentMetadata(
-        crate=crate,
-        item_path=f"{crate.value}::{title}",
-        raw_html_path=f"D:\\tmp\\{windows_path}",
-    )
     return Document(
-        doc_id=Document.generate_id(source_path, title),
-        title=title,
         source_path=source_path,
+        title=title,
         text=text,
+        crate=crate,
+        url=f"https://example.invalid/{source_path}",
+        item_path=f"{crate.value}::{title}",
         structured_blocks=[],
-        metadata=metadata,
     )
 
 
@@ -30,7 +33,7 @@ def test_clean_stage_normalizes_text_and_drops_short_docs():
     docs = [
         _make_doc(
             "std/intrinsics/simd/fn.simd_fcos.html",
-            "Function simd_ fcos\n\n§ Examples\n\n`cdylib` s are supported.\n",
+            "Function simd_ fcos\n\nÂ§ Examples\n\n`cdylib` s are supported.\n",
         ),
         _make_doc("std/os/index.html", "tiny text"),
     ]
@@ -40,7 +43,7 @@ def test_clean_stage_normalizes_text_and_drops_short_docs():
     assert len(cleaned) == 1
     assert "simd_fcos" in cleaned[0].text
     assert "Examples" in cleaned[0].text
-    assert "§ " not in cleaned[0].text
+    assert "Â§ " not in cleaned[0].text
     assert "`cdylib`s" in cleaned[0].text
 
 
@@ -63,23 +66,23 @@ def test_clean_stage_does_not_glue_syntax_labels_with_type_names():
 def test_clean_stage_normalizes_structured_blocks_without_breaking_code():
     doc = _make_doc(
         "std/example.html",
-        "Function simd_ fcos\n\nÂ§ Examples\n\nThis document is intentionally long enough.\n",
-    ).model_copy(
-        update={
-            "structured_blocks": [
-                StructuredBlock(
-                    block_type=BlockType.HEADING,
-                    text="Â§ Examples",
-                    html_tag="h2",
-                ),
-                StructuredBlock(
-                    block_type=BlockType.CODE_BLOCK,
-                    text="line1\r\nline2\r\n",
-                    html_tag="pre",
-                    code_language="rust",
-                ),
-            ]
-        }
+        "Function simd_ fcos\n\nÃ‚Â§ Examples\n\nThis document is intentionally long enough.\n",
+    )
+    doc = replace(
+        doc,
+        structured_blocks=[
+            StructuredBlock(
+                block_type=BlockType.HEADING,
+                text="Ã‚Â§ Examples",
+                html_tag="h2",
+            ),
+            StructuredBlock(
+                block_type=BlockType.CODE_BLOCK,
+                text="line1\r\nline2\r\n",
+                html_tag="pre",
+                code_language="rust",
+            ),
+        ],
     )
 
     cleaned = clean_documents([doc])
@@ -94,27 +97,27 @@ def test_clean_stage_rebuilds_text_from_structured_blocks_for_reference_docs():
         "reference/procedural-macros.html",
         "Procedural Macros\n\n```toml\nproc-macro = true\n```\n",
         crate=Crate.REFERENCE,
-    ).model_copy(
-        update={
-            "structured_blocks": [
-                StructuredBlock(
-                    block_type=BlockType.HEADING,
-                    text="Procedural Macros",
-                    html_tag="h1",
-                    section_path=["Procedural Macros"],
-                    anchor="procedural-macros",
-                    heading_level=1,
-                ),
-                StructuredBlock(
-                    block_type=BlockType.CODE_BLOCK,
-                    text="[lib]\nproc-macro = true",
-                    html_tag="pre",
-                    code_language="toml",
-                    section_path=["Procedural Macros"],
-                    anchor="procedural-macros",
-                ),
-            ]
-        }
+    )
+    doc = replace(
+        doc,
+        structured_blocks=[
+            StructuredBlock(
+                block_type=BlockType.HEADING,
+                text="Procedural Macros",
+                html_tag="h1",
+                section_path=["Procedural Macros"],
+                anchor="procedural-macros",
+                heading_level=1,
+            ),
+            StructuredBlock(
+                block_type=BlockType.CODE_BLOCK,
+                text="[lib]\nproc-macro = true",
+                html_tag="pre",
+                code_language="toml",
+                section_path=["Procedural Macros"],
+                anchor="procedural-macros",
+            ),
+        ],
     )
 
     cleaned = clean_documents([doc])
@@ -128,18 +131,18 @@ def test_clean_stage_normalizes_punctuation_spacing_in_structured_blocks():
     doc = _make_doc(
         "std/index.html",
         "The standard library is portable software .",
-    ).model_copy(
-        update={
-            "structured_blocks": [
-                StructuredBlock(
-                    block_type=BlockType.PARAGRAPH,
-                    text="The standard library is portable software .",
-                    html_tag="p",
-                    section_path=["std"],
-                    anchor="main-content",
-                ),
-            ]
-        }
+    )
+    doc = replace(
+        doc,
+        structured_blocks=[
+            StructuredBlock(
+                block_type=BlockType.PARAGRAPH,
+                text="The standard library is portable software .",
+                html_tag="p",
+                section_path=["std"],
+                anchor="main-content",
+            ),
+        ],
     )
 
     cleaned = clean_documents([doc])

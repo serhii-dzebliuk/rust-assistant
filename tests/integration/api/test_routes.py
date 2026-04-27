@@ -1,8 +1,8 @@
-import pytest
+﻿import pytest
 from fastapi.testclient import TestClient
 
-from rust_assistant.core.config import get_settings
-from rust_assistant.main import create_app
+from rust_assistant.bootstrap.api import create_app
+from rust_assistant.bootstrap.settings import get_settings
 
 
 pytestmark = pytest.mark.integration

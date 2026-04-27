@@ -1,16 +1,18 @@
+﻿from dataclasses import replace
+
 import pytest
 
-from rust_assistant.ingest.chunk import DocumentChunker, chunk_documents
-from rust_assistant.ingest.chunk_dedup import deduplicate_chunks
-from rust_assistant.ingest.parsing.core import blocks_to_text
-from rust_assistant.ingest.entities import (
+from rust_assistant.domain.entities.chunks import Chunk
+from rust_assistant.domain.entities.documents import Document
+from rust_assistant.domain.errors import ChunkingError
+from rust_assistant.domain.policies.chunk_deduplication import deduplicate_chunks
+from rust_assistant.domain.policies.chunking import chunk_document, chunk_documents
+from rust_assistant.domain.policies.text_rendering import blocks_to_text
+from rust_assistant.domain.value_objects.structured_blocks import (
     BlockType,
-    Chunk,
-    Document,
-    DocumentMetadata,
     StructuredBlock,
 )
-from rust_assistant.schemas.enums import Crate
+from rust_assistant.domain.enums import Crate
 
 pytestmark = pytest.mark.unit
 
@@ -22,18 +24,14 @@ def _make_doc(
     blocks: list[StructuredBlock],
 ) -> Document:
     text = blocks_to_text(blocks)
-    metadata = DocumentMetadata(
-        crate=crate,
-        item_path=f"{crate.value}::{title.replace(' ', '_')}",
-        raw_html_path=f"D:\\tmp\\{source_path.replace('/', '\\')}",
-    )
     return Document(
-        doc_id=Document.generate_id(source_path, title),
-        title=title,
         source_path=source_path,
+        title=title,
         text=text,
+        crate=crate,
+        url=f"https://example.invalid/{source_path}",
+        item_path=f"{crate.value}::{title.replace(' ', '_')}",
         structured_blocks=blocks,
-        metadata=metadata,
     )
 
 
@@ -95,9 +93,9 @@ def test_rustdoc_chunker_splits_by_sections_and_keeps_section_metadata():
     chunks = chunk_documents([doc])
 
     assert len(chunks) == 2
-    assert [chunk.metadata.section for chunk in chunks] == ["Struct Vec", "Panics"]
-    assert chunks[0].metadata.anchor == "main-content"
-    assert chunks[0].metadata.section_path == ["Struct Vec"]
+    assert [chunk.section_path[-1] for chunk in chunks] == ["Struct Vec", "Panics"]
+    assert chunks[0].section_anchor == "main-content"
+    assert chunks[0].section_path == ("Struct Vec",)
     assert "A contiguous growable array type." in chunks[0].text
     assert "```rust" in chunks[0].text
 
@@ -134,13 +132,13 @@ def test_book_chunker_preserves_exact_text_spans_when_splitting_large_section():
         ],
     )
 
-    chunks = DocumentChunker(max_chunk_chars=220).chunk_document(doc)
+    chunks = chunk_document(doc, max_chunk_chars=220)
 
     assert len(chunks) > 1
-    assert all(chunk.metadata.section == "Hello, Cargo!" for chunk in chunks)
+    assert all(chunk.section_path[-1] == "Hello, Cargo!" for chunk in chunks)
     assert chunks[0].text.startswith("Hello, Cargo!")
     assert all(
-        chunk.text == doc.text[chunk.metadata.start_char : chunk.metadata.end_char]
+        chunk.text == doc.text[chunk.start_offset : chunk.end_offset]
         for chunk in chunks
     )
     assert all(not chunk.text.startswith("Hello, Cargo!") for chunk in chunks[1:])
@@ -172,18 +170,18 @@ def test_chunker_splits_large_code_blocks_into_exact_document_slices():
         ],
     )
 
-    chunks = DocumentChunker(max_chunk_chars=120).chunk_document(doc)
+    chunks = chunk_document(doc, max_chunk_chars=120)
 
     assert len(chunks) > 1
     assert chunks[0].text.startswith("Examples")
-    assert chunks[0].metadata.start_char == 0
+    assert chunks[0].start_offset == 0
     assert chunks[-1].text.rstrip().endswith("```")
     assert all(
-        chunk.text == doc.text[chunk.metadata.start_char : chunk.metadata.end_char]
+        chunk.text == doc.text[chunk.start_offset : chunk.end_offset]
         for chunk in chunks
     )
     reconstructed = "".join(
-        doc.text[chunk.metadata.start_char : chunk.metadata.end_char] for chunk in chunks
+        doc.text[chunk.start_offset : chunk.end_offset] for chunk in chunks
     )
     assert reconstructed == doc.text
 
@@ -221,7 +219,7 @@ def test_chunker_splits_oversized_code_block_even_after_intro_paragraph():
         ],
     )
 
-    chunks = DocumentChunker(max_chunk_chars=160).chunk_document(doc)
+    chunks = chunk_document(doc, max_chunk_chars=160)
 
     assert len(chunks) > 2
     assert chunks[0].text.startswith("JSON format")
@@ -230,7 +228,7 @@ def test_chunker_splits_oversized_code_block_even_after_intro_paragraph():
         for chunk in chunks[1:]
     )
     assert all(
-        chunk.text == doc.text[chunk.metadata.start_char : chunk.metadata.end_char]
+        chunk.text == doc.text[chunk.start_offset : chunk.end_offset]
         for chunk in chunks
     )
 
@@ -266,17 +264,19 @@ def test_chunker_aligns_block_spans_to_actual_document_text():
             ),
         ],
     )
-    doc = doc.model_copy(update={"text": doc.text.replace("\n\n- A value", "\n\n  - A value")})
+    doc = replace(doc, text=doc.text.replace("\n\n- A value", "\n\n  - A value"))
 
-    rendered_blocks, block_spans = DocumentChunker()._build_block_spans(
-        doc.structured_blocks,
-        doc.text,
+    chunks = chunk_document(
+        doc,
+        max_chunk_chars=70,
     )
-    list_item_index = 2
-    start_char, end_char = block_spans[list_item_index]
+    list_item_chunk = next(chunk for chunk in chunks if "- A value" in chunk.text)
 
-    assert start_char == doc.text.index("- A value")
-    assert doc.text[start_char:end_char] == rendered_blocks[list_item_index]
+    assert list_item_chunk.start_offset == doc.text.index("- A value")
+    assert (
+        list_item_chunk.text
+        == doc.text[list_item_chunk.start_offset : list_item_chunk.end_offset]
+    )
 
 
 def test_cargo_chunker_preserves_section_path_metadata():
@@ -315,8 +315,8 @@ def test_cargo_chunker_preserves_section_path_metadata():
     chunks = chunk_documents([doc])
 
     assert len(chunks) == 1
-    assert chunks[0].metadata.section == "SYNOPSIS"
-    assert chunks[0].metadata.section_path == ["cargo-run(1)", "SYNOPSIS"]
+    assert chunks[0].section_path[-1] == "SYNOPSIS"
+    assert chunks[0].section_path == ("cargo-run(1)", "SYNOPSIS")
 
 
 def test_chunker_merges_tiny_sibling_sections_for_reference_docs():
@@ -393,11 +393,11 @@ def test_chunker_merges_tiny_sibling_sections_for_reference_docs():
     chunks = chunk_documents([doc])
 
     assert len(chunks) == 1
-    assert chunks[0].metadata.section == "Set Configuration Options"
-    assert chunks[0].metadata.section_path == [
+    assert chunks[0].section_path[-1] == "Set Configuration Options"
+    assert chunks[0].section_path == (
         "Conditional compilation",
         "Set Configuration Options",
-    ]
+    )
     assert "`target_endian`" in chunks[0].text
     assert "`target_pointer_width`" in chunks[0].text
 
@@ -461,7 +461,7 @@ def test_chunker_drops_empty_cargo_changelog_release_stub():
     chunks = chunk_documents([doc])
 
     assert len(chunks) == 1
-    assert chunks[0].metadata.section_path == ["Changelog", "Cargo 1.90 (2025-09-18)", "Added"]
+    assert chunks[0].section_path == ("Changelog", "Cargo 1.90 (2025-09-18)", "Added")
     assert "Cargo 1.91 (2025-10-30)" not in chunks[0].text
 
 
@@ -516,7 +516,7 @@ def test_chunk_dedup_removes_exact_duplicate_chunks_within_same_crate():
 
     assert len(chunks) == 2
     assert len(deduped) == 1
-    assert deduped[0].metadata.doc_source_path == "book/ch01.html"
+    assert deduped[0].source_path == "book/ch01.html"
 
 
 def test_chunk_dedup_restores_one_chunk_for_each_document():
@@ -569,7 +569,7 @@ def test_chunk_dedup_restores_one_chunk_for_each_document():
     deduped = deduplicate_chunks(chunks, documents=[doc_a, doc_b])
 
     assert len(deduped) == 2
-    assert {chunk.metadata.doc_source_path for chunk in deduped} == {
+    assert {chunk.source_path for chunk in deduped} == {
         "book/ch01.html",
         "book/ch01-copy.html",
     }
@@ -599,37 +599,21 @@ def test_chunk_dedup_reindexes_chunks_per_document_after_removing_duplicates():
         ],
     )
     first = chunk_documents([doc])[0]
-    duplicate = Chunk(
-        chunk_id=Chunk.generate_id(doc.doc_id, 5),
-        doc_id=doc.doc_id,
-        text=first.text,
-        metadata=first.metadata.model_copy(
-            update={
-                "chunk_index": 5,
-                "start_char": 100,
-                "end_char": 115,
-            }
-        ),
-    )
-    unique = Chunk(
-        chunk_id=Chunk.generate_id(doc.doc_id, 9),
-        doc_id=doc.doc_id,
+    duplicate = replace(first, chunk_index=5, start_offset=100, end_offset=115)
+    unique = replace(
+        first,
         text="Unique later text.",
-        metadata=first.metadata.model_copy(
-            update={
-                "chunk_index": 9,
-                "start_char": 200,
-                "end_char": 218,
-            }
-        ),
+        chunk_index=9,
+        start_offset=200,
+        end_offset=218,
     )
 
     deduped = deduplicate_chunks([first, duplicate, unique])
 
-    assert [chunk.metadata.chunk_index for chunk in deduped] == [0, 1]
-    assert [chunk.chunk_id for chunk in deduped] == [
-        Chunk.generate_id(doc.doc_id, 0),
-        Chunk.generate_id(doc.doc_id, 1),
+    assert [chunk.chunk_index for chunk in deduped] == [0, 1]
+    assert [(chunk.source_path, chunk.chunk_index) for chunk in deduped] == [
+        (doc.source_path, 0),
+        (doc.source_path, 1),
     ]
 
 
@@ -675,25 +659,50 @@ def test_chunker_splits_oversized_non_code_sections_on_safe_boundaries():
         ],
     )
 
-    chunks = DocumentChunker(max_chunk_chars=260).chunk_document(doc)
+    chunks = chunk_document(doc, max_chunk_chars=260)
 
     assert len(chunks) > 1
     assert all(len(chunk.text) <= 260 for chunk in chunks)
     assert all(
-        chunk.text == doc.text[chunk.metadata.start_char : chunk.metadata.end_char]
+        chunk.text == doc.text[chunk.start_offset : chunk.end_offset]
         for chunk in chunks
     )
 
 
-def test_text_boundary_splitter_avoids_tiny_tail_fragments():
-    text = "This sentence has several useful words. " * 6
+def test_chunker_avoids_tiny_tail_fragments_when_splitting_long_text():
+    paragraph = ("This sentence has several useful words. " * 6).strip()
+    doc = _make_doc(
+        source_path="reference/long-sentences.html",
+        title="Long sentences",
+        crate=Crate.REFERENCE,
+        blocks=[
+            StructuredBlock(
+                block_type=BlockType.HEADING,
+                text="Long sentences",
+                html_tag="h1",
+                heading_level=1,
+                anchor="long-sentences",
+                section_path=["Long sentences"],
+            ),
+            StructuredBlock(
+                block_type=BlockType.PARAGRAPH,
+                text=paragraph,
+                html_tag="p",
+                anchor="long-sentences",
+                section_path=["Long sentences"],
+            ),
+        ],
+    )
 
-    groups = DocumentChunker()._split_text_by_boundaries(text, 170)
+    chunks = chunk_document(doc, max_chunk_chars=170)
 
-    assert len(groups) == 2
-    assert all(len(group_text) <= 170 for group_text, _ in groups)
-    assert len(groups[-1][0].strip()) >= 80
-    assert "".join(group_text for group_text, _ in groups) == text
+    assert len(chunks) == 2
+    assert all(len(chunk.text) <= 170 for chunk in chunks)
+    assert len(chunks[-1].text.strip()) >= 80
+    reconstructed = "".join(
+        doc.text[chunk.start_offset : chunk.end_offset] for chunk in chunks
+    )
+    assert reconstructed == doc.text
 
 
 def test_chunker_does_not_emit_heading_only_chunk_before_oversized_code_block():
@@ -722,7 +731,7 @@ def test_chunker_does_not_emit_heading_only_chunk_before_oversized_code_block():
         ],
     )
 
-    chunks = DocumentChunker(max_chunk_chars=180).chunk_document(doc)
+    chunks = chunk_document(doc, max_chunk_chars=180)
 
     assert len(chunks) > 1
     assert all(chunk.text != "Examples\n\n" for chunk in chunks)
@@ -756,8 +765,8 @@ def test_chunker_refuses_to_split_single_oversized_code_line():
         ],
     )
 
-    with pytest.raises(ValueError, match="Cannot safely split a code block line"):
-        DocumentChunker(max_chunk_chars=120).chunk_document(doc)
+    with pytest.raises(ChunkingError, match="Cannot safely split a code block line"):
+        chunk_document(doc, max_chunk_chars=120)
 
 
 def test_chunker_refuses_blind_split_without_text_boundary():
@@ -784,5 +793,6 @@ def test_chunker_refuses_blind_split_without_text_boundary():
         ],
     )
 
-    with pytest.raises(ValueError, match="without a semantic boundary"):
-        DocumentChunker(max_chunk_chars=120).chunk_document(doc)
+    with pytest.raises(ChunkingError, match="without a semantic boundary"):
+        chunk_document(doc, max_chunk_chars=120)
+

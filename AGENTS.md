@@ -1,30 +1,27 @@
-# Repo guidelines
+﻿# Repo guidelines
 
 ## General
 - Refer to `docs/architecture.md` for current system architecture and component responsibilities before making structural changes.
 
 ## Project Structure & Module Organization
 - Use `src/rust_assistant/` as the main Python package for the `rust-assistant` backend.
-- Keep `src/rust_assistant/main.py` minimal and limited to FastAPI app creation, router registration, middleware, exception handlers, and startup/shutdown wiring.
-- Organize the backend by responsibility, not by technical accident.
-- Recommended structure:
-  - `src/rust_assistant/api/` — FastAPI routers, request/response schemas, dependencies, HTTP error mapping
-  - `src/rust_assistant/services/` — application and domain logic
-  - `src/rust_assistant/retrieval/` — retrieval flow, ranking, context assembly, Qdrant-facing retrieval orchestration
-  - `src/rust_assistant/ingest/` — document loading, parsing, chunking, metadata extraction, embedding pipeline
-  - `src/rust_assistant/clients/` — external integrations such as LLM clients, embedding clients, and other provider adapters
-  - `src/rust_assistant/repositories/` — Postgres persistence logic for chunks, documents, metadata, and chunk synchronization state
-  - `src/rust_assistant/models/` — ORM/database models(DB layer)
-  - `src/rust_assistant/schemas/` — shared Pydantic schemas and DTOs(API layer)
-  - `src/rust_assistant/core/` — settings, logging, security, dependency wiring, shared app configuration
-  - `src/rust_assistant/utils/` — small generic helpers only; do not place core business logic here
+- The project is moving to Clean Hexagonal Architecture. During the transition, new code lives under `src/rust_assistant/`; after migration, `application`, `bootstrap`, `domain`, and `infrastructure` should move directly under `src/rust_assistant/`.
+- Keep `src/rust_assistant/asgi.py` as the public ASGI entrypoint and `src/rust_assistant/__main__.py` as the public CLI entrypoint.
+- Organize the backend by architectural responsibility:
+  - `domain/` — entities, value objects, enums, domain errors, and pure domain policies
+  - `application/` — use cases, application DTOs, and ports for external dependencies
+  - `infrastructure/inbound/` — FastAPI routers, API schemas, CLI commands, jobs, and other inbound adapters
+  - `infrastructure/outbound/` — SQLAlchemy/Postgres, Qdrant, parser, tokenizer, LLM, embedding, filesystem, and other outbound adapters
+  - `bootstrap/` — settings, logging setup, dependency wiring, app creation, and runtime entrypoint orchestration
+- Keep dependency direction one-way: `domain <- application <- infrastructure`, with `bootstrap` selecting concrete implementations.
 - Keep retrieval concerns separate from persistence concerns:
   - Qdrant is the vector retrieval store
   - Postgres is the source of truth for chunk text, document metadata, and chunk synchronization state
-- Keep LangChain orchestration out of routers; place it in dedicated service/retrieval modules.
-- Keep external provider code behind dedicated client/adaptor modules so orchestration logic is not coupled to one provider SDK.
-- Routers should call services; they must not directly contain retrieval pipelines, database logic, or provider-specific code.
-- Keep database access out of routers and out of generic utility modules.
+- Keep LangChain or provider orchestration out of routers; place it in application use cases and outbound adapters behind ports.
+- Keep external provider code behind dedicated outbound adapter modules so orchestration logic is not coupled to one provider SDK.
+- Routers and CLI adapters should call application use cases; they must not directly contain retrieval pipelines, database logic, or provider-specific code.
+- Keep database access out of routers, domain policies, application use cases, and generic utility modules; access Postgres through repository/unit-of-work ports and outbound adapters.
+- Keep `__init__.py` files only in the main architectural package roots: `application`, `bootstrap`, `domain`, and `infrastructure`. Do not add nested `__init__.py` files unless there is a concrete runtime/tooling requirement, and do not add them only for convenience exports.
 - Keep Docker-related deployment files outside `src/rust_assistant/`, for example:
   - `compose.yaml`
   - `docker/` for Dockerfiles and container-related assets
@@ -34,12 +31,13 @@
 - Recommended test layout:
   - `tests/unit/`
   - `tests/integration/`
-  - `tests/unit/services/`
-  - `tests/unit/retrieval/`
-  - `tests/unit/ingest/`
+  - `tests/unit/application/`
+  - `tests/unit/domain/`
+  - `tests/unit/infrastructure/`
+  - `tests/unit/bootstrap/`
   - `tests/integration/api/`
   - `tests/integration/db/`
-  - `tests/integration/qdrant/`
+  - `tests/integration/infrastructure/`
   - `tests/conftest.py`
 - Keep notebooks in `notebooks/` for exploratory work only; do not place production logic there.
 - Treat logs, caches, uploaded files, snapshots, and other runtime-generated data as non-versioned artifacts.
@@ -128,7 +126,7 @@
 - Use Python `logging` as the default logging system for the whole project.
 - Do not use `print()` for application logs.
 - Create and use module-level loggers via `logging.getLogger(__name__)`.
-- Keep logging setup centralized in one place, for example `src/rust_assistant/core/logging.py`.
+- Keep logging setup centralized in one place, for example `src/rust_assistant/bootstrap/logging.py` during migration and `src/rust_assistant/bootstrap/logging.py` after flattening.
 - Configure logging once at application startup.
 - Use consistent log levels:
   - `DEBUG` for detailed developer diagnostics
@@ -169,10 +167,13 @@
 - Register custom pytest markers in `pyproject.toml` under `[tool.pytest.ini_options]`.
 - Keep all tests under `tests/`.
 - Organize tests by type and layer, for example:
-  - `tests/unit/services/`
-  - `tests/unit/utils/`
+  - `tests/unit/application/`
+  - `tests/unit/domain/`
+  - `tests/unit/infrastructure/`
+  - `tests/unit/bootstrap/`
   - `tests/integration/api/`
   - `tests/integration/db/`
+  - `tests/integration/infrastructure/`
 - Use `tests/conftest.py` for shared fixtures.
 - Name files `test_*.py`, functions `test_*`, classes `Test*`.
 - Prefer one test module per source module when practical.

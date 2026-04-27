@@ -1,4 +1,4 @@
-# Architecture Overview
+﻿# Architecture Overview
 
 ## Purpose
 
@@ -8,20 +8,159 @@ documentation.
 Its main goal is to provide grounded answers by retrieving relevant documentation chunks
 first and only then calling an LLM.
 
-## Current implementation status
+## Clean Hexagonal Architecture
 
-The repository is currently in a transition state:
+The system follows a Clean Hexagonal Architecture.
 
-- the serving runtime is still mostly stub-based
-- the ingest pipeline keeps intermediate documents and chunks in memory and persists
-  canonical output to PostgreSQL
-- PostgreSQL is wired through SQLAlchemy/Alembic, while Qdrant embedding synchronization
-  is still pending
+The core of the system is formed by `domain` and `application`:
 
-The architecture below describes the target structure that new persistence and migration
-work should follow.
+- `domain` models the problem space, business rules, value objects, policies, and domain
+  errors
+- `application` implements use cases, orchestration, input/output DTOs, and ports for
+  external dependencies
 
-## Core components
+All frameworks, SDKs, databases, and external services live outside the core in
+`infrastructure`. `bootstrap` selects concrete implementations and wires the dependency
+graph together.
+
+Dependency direction:
+
+```text
+domain <- application <- infrastructure
+                 ^
+                 |
+             bootstrap
+```
+
+This means the core does not depend on FastAPI, SQLAlchemy, Alembic, OpenAI, Qdrant,
+`tiktoken`, or any other external tool. Those concerns are isolated behind ports and
+adapters.
+
+## Architectural Layers
+
+### Domain
+
+`domain` contains the pure business model of the system.
+
+Typical contents:
+- entities such as `Document` and `Chunk`
+- enums and value objects such as `DocumentStatus`, `ItemType`, and `Crate`
+- domain rules, normalization logic, and policies
+- domain-specific exceptions and invariants
+
+`domain` must not import `application`, `infrastructure`, or `bootstrap`.
+
+### Application
+
+`application` defines what the system does through use cases.
+
+Typical contents:
+- `use_cases/` for chat, search, ingest, and related orchestration
+- `ports/` for contracts such as `LLMClient`, `InferenceClient`, `Tokenizer`,
+  `VectorStore`, `DocumentRepository`, and `ChunkRepository`
+- `dto/` for internal input/output models used by use cases
+
+`application` depends on `domain` and on port abstractions only. It does not import
+concrete adapters or framework-specific code.
+
+### Infrastructure
+
+`infrastructure` contains all adapters around the application core.
+
+Inbound adapters receive external input and call use cases:
+- HTTP API
+- CLI commands
+- background jobs and ingest entrypoints
+
+Outbound adapters implement ports and integrate with external systems:
+- PostgreSQL and SQLAlchemy
+- Qdrant
+- LLM and inference providers such as OpenAI
+- tokenizers such as `tiktoken`
+- filesystem access and other operational integrations
+
+### Bootstrap
+
+`bootstrap` is responsible for configuration and dependency assembly.
+
+Responsibilities:
+- load and validate runtime settings
+- choose concrete adapter implementations for each port
+- build use case instances and dependency graphs
+- expose wiring helpers for API startup and ingest execution
+
+## Target Module Layout
+
+The target package layout is:
+
+```text
+src/rust_assistant/
+  asgi.py
+  __main__.py
+  NEW/
+    domain/
+    application/
+      ports/
+      use_cases/
+      dto/
+    infrastructure/
+      inbound/
+        api/
+          routers/
+          schemas/
+        cli/
+      outbound/
+    bootstrap/
+      settings.py
+      logging.py
+      container.py
+      api.py
+      ingest.py
+
+alembic/
+  env.py
+  script.py.mako
+  versions/
+```
+
+Responsibilities:
+
+- `src/rust_assistant/asgi.py` - public ASGI entrypoint that exposes the FastAPI app
+- `src/rust_assistant/__main__.py` - public package CLI entrypoint
+- `src/rust_assistant/domain/` - domain entities, value objects, enums, policies, and
+  domain errors
+- `src/rust_assistant/application/ports/` - contracts for outbound dependencies
+- `src/rust_assistant/application/use_cases/` - scenario orchestration for chat,
+  search, ingest, and related operations
+- `src/rust_assistant/application/dto/` - internal request/result models for use cases
+- `src/rust_assistant/infrastructure/inbound/api/` - FastAPI routers and HTTP schemas
+- `src/rust_assistant/infrastructure/inbound/cli/` - CLI and job entrypoints
+- `src/rust_assistant/infrastructure/outbound/` - SQLAlchemy, Qdrant, OpenAI,
+  tokenizer, and other adapter implementations
+- `src/rust_assistant/bootstrap/` - centralized settings, logging, and dependency
+  wiring
+- `alembic/` - relational schema migrations for the PostgreSQL adapter
+
+## Model Boundaries
+
+The architecture keeps internal models separate from transport and persistence models.
+
+- Domain entities are not ORM models.
+- Domain entities are not API request or response schemas.
+- Application DTOs are internal use-case contracts.
+- API schemas exist only for HTTP transport concerns.
+- ORM models exist only for relational persistence concerns.
+
+Rules:
+- `application/dto` is the only place for use-case input/output models
+- `infrastructure/inbound/api/schemas` is only for external HTTP request and response
+  models
+- `infrastructure/outbound/.../models` is only for ORM or adapter-specific persistence
+  mappings
+
+This separation prevents framework-specific structures from leaking into the core.
+
+## Runtime Components
 
 ### Caddy
 
@@ -30,87 +169,75 @@ Caddy is the public entrypoint.
 Responsibilities:
 - terminate HTTP/HTTPS traffic
 - reverse proxy requests to the backend
-- keep backend and databases off the public edge where possible
+- keep backend and data services off the public edge where possible
 
-### FastAPI backend
+### FastAPI API adapter
 
-The backend handles HTTP requests, request validation, orchestration, and response
-generation.
-
-Responsibilities:
-- expose API endpoints
-- coordinate retrieval and answer generation
-- manage configuration, logging, and dependency wiring
-- create request-scoped database sessions for Postgres access
-- keep HTTP concerns separate from retrieval, persistence, and provider integrations
-
-### PostgreSQL
-
-PostgreSQL is the source of truth for normalized documentation data.
+FastAPI is an inbound adapter in `infrastructure/inbound/api/`.
 
 Responsibilities:
-- store documents and chunks
+- expose HTTP endpoints
+- validate and map HTTP requests into application DTOs
+- call application use cases
+- map use-case results and failures into HTTP responses
+
+FastAPI is not part of the application core.
+
+### PostgreSQL and SQLAlchemy persistence adapter
+
+PostgreSQL is the canonical relational store. SQLAlchemy is the outbound persistence
+adapter used to access it.
+
+Responsibilities:
+- store canonical documents and chunks
 - store chunk text and metadata
-- store chunk synchronization state
-- store relational application data used by both backend and ingest
+- store chunk synchronization state and relational application data
+- implement repository ports behind SQLAlchemy-based adapters
 
 PostgreSQL contains the canonical chunk text used to assemble LLM context.
 
-### SQLAlchemy
-
-SQLAlchemy is the application's Postgres integration layer.
-
-Responsibilities:
-- define ORM mappings for relational tables
-- provide shared async engine and session management
-- power repository implementations used by backend and ingest
-- keep raw SQL and connection management out of routers and ingest parsing code
-
-The project uses SQLAlchemy 2.0 async APIs with the `asyncpg` driver via
-`postgresql+asyncpg://...` connection URLs.
-
 ### Alembic
 
-Alembic is the schema migration tool for PostgreSQL.
+Alembic manages relational schema evolution for the PostgreSQL adapter.
 
 Responsibilities:
 - version relational schema changes
-- run upgrades before backend or ingest workloads rely on new schema
+- run upgrades before runtime workloads rely on new schema
 - keep schema evolution explicit, reviewable, and reproducible
 
-Alembic is the only supported mechanism for schema changes in shared environments.
+Alembic is the supported mechanism for shared schema changes.
 
-### Qdrant
+### Qdrant vector adapter
 
-Qdrant is the vector retrieval layer.
+Qdrant is the outbound vector storage and retrieval adapter.
 
 Responsibilities:
-- store embedding vectors
+- store embeddings
 - perform nearest-neighbor search
 - support lightweight metadata filtering for retrieval
 
 Qdrant is not the source of truth for chunk text.
 
-### LangChain
+### LLM, inference, and tokenizer adapters
 
-LangChain is used as an orchestration layer for LLM-related workflows.
+LLM providers, inference clients, and tokenizers are outbound adapters behind
+application ports.
 
 Responsibilities:
-- coordinate prompt construction and model calls
-- support retrieval-to-generation flow
-- keep model orchestration out of routers
+- generate embeddings
+- perform answer generation or ranking calls
+- provide token counting or tokenization services required by use cases
 
 ### Raw documentation storage
 
-Raw Rust documentation files live outside the main application logic and are treated as
-ingest artifacts.
+Raw Rust documentation files are ingest inputs and operational artifacts.
 
 Responsibilities:
-- provide local input for the ingest pipeline
-- remain reproducible and replaceable
-- stay out of version control when generated locally
+- provide reproducible source material for ingest
+- remain replaceable and source-oriented
+- stay separate from application core logic
 
-## Data ownership model
+## Data Ownership Model
 
 The system intentionally separates vector retrieval from canonical content storage.
 
@@ -130,30 +257,35 @@ The system intentionally separates vector retrieval from canonical content stora
 - lightweight retrieval metadata needed for search
 
 Qdrant payloads should not duplicate canonical chunk text. Store only lightweight filter
-metadata such as chunk/document ids, crate, item type, Rust version, source path, item path,
-chunk index, and chunk hash. PostgreSQL remains the source of truth for text and source
-attribution.
+metadata such as chunk id, document id, crate, item type, Rust version, source path,
+item path, chunk index, and chunk hash. PostgreSQL remains the source of truth for text
+and source attribution.
+
+Document and chunk business identities are deterministic UUIDs derived in the application
+layer. Database integer primary keys are technical persistence keys only.
 
 This split keeps retrieval fast while preserving a clean canonical data store.
 
-## PostgreSQL integration with SQLAlchemy and Alembic
+## Persistence and Migrations
 
-All Postgres access, from both the backend and the ingest pipeline, should go through the
-same SQLAlchemy-based persistence layer.
+All PostgreSQL access should go through outbound adapters that implement application
+repository ports.
 
-### Access pattern
+### Persistence boundaries
 
-- `src/rust_assistant/core/db/base.py` defines the shared SQLAlchemy `DeclarativeBase` and
-  metadata conventions
-- `src/rust_assistant/core/db/session.py` creates the async engine and
-  `async_sessionmaker` from `DATABASE_URL`
-- `src/rust_assistant/models/` contains only SQLAlchemy ORM models
-- `src/rust_assistant/repositories/` contains Postgres query and upsert logic built on top
-  of `AsyncSession`
-- `src/rust_assistant/services/` and ingest persistence orchestrators define transaction
-  boundaries and call repositories
-- `src/rust_assistant/api/deps.py` exposes request-scoped `AsyncSession` dependencies for
-  FastAPI routes and services
+Repository adapter responsibilities:
+- select canonical document and chunk rows
+- insert or upsert ingest output into PostgreSQL
+- expose narrow persistence operations to use cases
+
+Repository adapter non-responsibilities:
+- no HTTP concerns
+- no FastAPI wiring
+- no direct LLM orchestration
+- no direct Qdrant orchestration unless explicitly modeled through a port
+
+Transaction boundaries should be controlled by use cases or dedicated application
+orchestration, not by low-level repository methods.
 
 ### Async database driver
 
@@ -163,66 +295,20 @@ The runtime connection string should use the SQLAlchemy async dialect:
 DATABASE_URL=postgresql+asyncpg://postgres:change-me@postgres:5432/rust_assistant
 ```
 
-Backend and ingest should both use the same SQLAlchemy async stack:
+The PostgreSQL adapter should use:
 
 - `create_async_engine(...)`
 - `async_sessionmaker(...)`
 - `AsyncSession`
 
-This keeps one consistent persistence model across API requests, ingest writes, and
-future background jobs.
+### ORM model placement
 
-### Repository boundaries
-
-Repositories are the only layer that should directly issue ORM queries.
-
-Repository responsibilities:
-- select canonical document and chunk rows
-- insert or upsert ingest output into Postgres
-- expose narrow persistence methods to services and ingest orchestration
-
-Repository non-responsibilities:
-- no HTTP concerns
-- no LangChain orchestration
-- no direct Qdrant writes
-- no router wiring
-- no transaction ownership beyond flush-level operations
-
-Commits and rollbacks should be controlled by services or ingest persistence orchestration,
-not by individual repository methods.
-
-### ORM models
-
-`src/rust_assistant/models/` is reserved for SQLAlchemy ORM models only.
-
-Expected initial relational model:
-
-- `documents`
-  - canonical document metadata and source identity
-  - one row per parsed documentation page
-- `chunks`
-  - canonical chunk text, ordering, section metadata, and document foreign key
-  - one row per retrieval chunk
-
-Additional sync-oriented fields may be added where useful, for example indexing status or
-timestamps that indicate whether a canonical Postgres row has already been propagated to
-Qdrant.
-
-### Placement of non-ORM models
-
-Non-ORM models should stay outside `src/rust_assistant/models/`, which is reserved for
-SQLAlchemy ORM classes. The current project layout should follow this split:
-
-- shared enums such as `Crate` and `ItemType` belong in
-  `src/rust_assistant/schemas/enums.py` because they are also used by API filters
-- ingest-only entities such as parsed documents, structured blocks, and chunking payloads
-  belong in `src/rust_assistant/ingest/`, for example `ingest/entities.py`
-- API request and response DTOs belong only in `src/rust_assistant/schemas/`
-- legacy API DTOs in `models/` should be removed, not relocated into the ORM layer
+ORM classes belong only in infrastructure-level persistence modules. They are adapter
+implementation details and must not be used as domain entities or application DTOs.
 
 ### Alembic usage
 
-Alembic lives at the repository root and manages the relational schema:
+Alembic lives at the repository root:
 
 ```text
 alembic/
@@ -231,131 +317,74 @@ alembic/
   versions/
 ```
 
-Alembic responsibilities:
-- create and evolve the Postgres schema
-- autogenerate candidate migrations from SQLAlchemy metadata when appropriate
-- keep migration history in version control
-
-Architectural rules for migrations:
+Migration rules:
 - do not rely on `Base.metadata.create_all()` in backend startup
 - do not create or alter shared schema from ad hoc runtime code
 - run `alembic upgrade head` before backend or ingest workloads depend on a new schema
+- when business identity or payload identity changes, rebuild downstream vector state after
+  canonical PostgreSQL data is brought up to date
 
-The preferred Alembic environment is the async template so migrations can use the same
-`postgresql+asyncpg://...` URL family as the application runtime.
+## Main Flows
 
-## Main flows
+### Ingest flow
 
-## Ingest flow
-
-1. Raw documentation is downloaded or loaded from disk.
-2. Source files are parsed into normalized ingest entities.
-3. Documents are cleaned, deduplicated, and split into chunks.
-4. The ingest persistence stage opens a batch-scoped `AsyncSession`.
-5. Documents and chunks are written to PostgreSQL inside a transaction.
-6. After Postgres commit succeeds, embeddings are generated and written to Qdrant.
-7. A follow-up Postgres update records indexing or synchronization status when needed.
+1. An inbound adapter triggers the ingest use case from CLI, a job, or another entrypoint.
+2. The application ingest use case loads and parses raw documentation inputs.
+3. Domain rules normalize content, metadata, and chunk structure.
+4. The use case calls repository, tokenizer, and vector-storage ports.
+5. Outbound adapters persist canonical documents and chunks to PostgreSQL.
+6. Outbound adapters generate embeddings and synchronize vectors to Qdrant.
+7. The use case records synchronization outcomes through repository ports when needed.
 
 Design goals:
 - reproducible
 - idempotent where practical
-- source-aware but normalized at the storage boundary
-- resilient when Qdrant indexing fails after canonical Postgres writes
+- source-aware but normalized at the persistence boundary
+- resilient when vector synchronization fails after canonical PostgreSQL writes
 
-This ordering makes Postgres the canonical landing zone for ingest output. If vector
-indexing fails, the system can retry Qdrant synchronization without reparsing the source
-documents.
+### Search and chat flow
 
-## Query flow
+1. A user sends a request to an HTTP endpoint.
+2. The FastAPI router validates the request and maps it into an application DTO.
+3. The router calls the relevant search or chat use case.
+4. The use case calls vector-store, repository, inference, and LLM ports as needed.
+5. Outbound adapters query Qdrant and load canonical text and metadata from PostgreSQL.
+6. The use case assembles grounded context and produces an application result DTO.
+7. The HTTP adapter maps the result DTO into an API response schema.
 
-1. A user sends a question to the backend.
-2. FastAPI resolves a request-scoped `AsyncSession` through API dependencies.
-3. The backend generates an embedding for the question.
-4. Qdrant returns the most relevant numeric `chunks.id` values.
-5. Repository methods load canonical chunk text and metadata from PostgreSQL.
-6. Retrieved chunks are assembled into model context.
-7. LangChain orchestrates the LLM call.
-8. The backend returns the answer.
+This flow keeps transport details and infrastructure concerns outside the core while
+ensuring the LLM answer is grounded in retrieved documentation.
 
-This flow ensures the LLM answer is grounded in retrieved documentation rather than
-relying only on model memory.
+## Architectural Rules
 
-## Application module layout
-
-Recommended backend structure:
-
-```text
-src/rust_assistant/
-  main.py
-  api/
-  services/
-  retrieval/
-  ingest/
-    parsing/
-    entities.py
-    persist.py
-  clients/
-  repositories/
-  models/
-  schemas/
-    enums.py
-  core/
-    config.py
-    logging.py
-    db/
-      base.py
-      session.py
-  utils/
-
-alembic/
-  env.py
-  script.py.mako
-  versions/
-```
-
-Responsibilities:
-
-- `src/rust_assistant/main.py` - app creation and startup wiring
-- `src/rust_assistant/api/` - routers, HTTP dependencies, request/response handling
-- `src/rust_assistant/services/` - application and domain orchestration
-- `src/rust_assistant/retrieval/` - retrieval flow, ranking, context assembly, Qdrant-facing
-  orchestration
-- `src/rust_assistant/ingest/` - parsing, chunking, ingest-domain entities, and ingest
-  persistence orchestration
-- `src/rust_assistant/clients/` - external integrations such as LLM, embedding, and vector
-  store clients
-- `src/rust_assistant/repositories/` - PostgreSQL persistence access via SQLAlchemy
-- `src/rust_assistant/models/` - SQLAlchemy ORM models only
-- `src/rust_assistant/schemas/` - Pydantic request/response schemas and shared enums
-- `src/rust_assistant/core/` - config, logging, shared dependency wiring, and database setup
-- `src/rust_assistant/utils/` - small generic helpers only
-- `alembic/` - relational schema migrations
-
-## Architectural rules
-
-- Routers should call services, not directly implement retrieval or persistence logic
-- Database access should stay out of routers
-- LangChain orchestration should stay out of routers
-- PostgreSQL is the source of truth for chunk text and metadata
+- `domain` does not import `application`, `infrastructure`, or `bootstrap`
+- `application` imports `domain` and port abstractions, not concrete adapters
+- `infrastructure/outbound` implements application ports
+- `infrastructure/inbound` invokes use cases and maps external request/response models
+- `bootstrap` owns configuration and dependency assembly
+- API schemas are not application DTOs
+- ORM models are not domain models
+- PostgreSQL is the source of truth for canonical text and metadata
 - Qdrant is used for embeddings and retrieval only
-- SQLAlchemy ORM models live only in `src/rust_assistant/models/`
-- API schemas and shared enums live in `src/rust_assistant/schemas/`
-- Ingest parsing and chunking entities live in `src/rust_assistant/ingest/`
-- Repositories use `AsyncSession` and do not own commits
-- Backend and ingest share the same SQLAlchemy engine/session conventions
-- Alembic is the only supported mechanism for schema evolution
-- Runtime configuration should come from a centralized settings module
-- Public traffic should enter through Caddy
-- Backend, Postgres, and Qdrant should communicate over internal Docker networks where
-  possible
+- public traffic should enter through Caddy
+- runtime configuration should come from a centralized settings module
 
-## Deployment model
+Rule of placement for new code:
+- business rule -> `domain`
+- dependency contract -> `application/ports`
+- use-case input/output -> `application/dto`
+- use-case orchestration -> `application/use_cases`
+- FastAPI, CLI, jobs -> `infrastructure/inbound`
+- OpenAI, Qdrant, SQLAlchemy, `tiktoken`, filesystem integrations -> `infrastructure/outbound`
+- config and wiring -> `bootstrap`
+
+## Deployment Model
 
 The project is designed for self-hosted deployment on Ubuntu with Docker Compose.
 
 Typical services:
 - `proxy` - Caddy
-- `backend` - FastAPI
+- `backend` - FastAPI application
 - `postgres` - PostgreSQL
 - `qdrant` - Qdrant
 
@@ -363,42 +392,44 @@ Recommended deployment order:
 
 1. Start PostgreSQL and wait for health readiness.
 2. Run `alembic upgrade head`.
-3. Start backend and ingest workloads.
-4. Allow backend requests only after dependencies and migrations are ready.
+3. Run a full ingest rebuild so PostgreSQL and vector payloads are regenerated from the
+   current source material.
+4. Rebuild or resynchronize vector-store state if that environment uses Qdrant.
+5. Start backend workloads.
+6. Allow backend requests only after dependencies and migrations are ready.
+
+Operational note:
+- PostgreSQL does not need to be wiped before the UUID identity migration because Alembic
+  backfills business UUID ids in-place.
+- A full reingest after migration is still recommended to produce a clean canonical state.
 
 Deployment conventions:
 - use `compose.yaml` as the main deployment definition
-- persist Postgres and Qdrant data with Docker volumes
+- persist PostgreSQL and Qdrant data with Docker volumes
 - keep backend containers stateless where possible
 - load runtime configuration from environment variables
 - use `postgresql+asyncpg://...` for `DATABASE_URL`
 - keep secrets out of the repository
+- keep backend, PostgreSQL, and Qdrant on internal Docker networks where practical
 
-## Why this architecture
+## Why This Architecture
 
-This design tries to balance:
+This design balances:
 
-- clarity - each component has one clear responsibility
-- maintainability - API, retrieval, ingest, persistence, and infra stay separated
-- self-hosting - all core services can run on a single Ubuntu server
-- scalability - Qdrant and PostgreSQL can be tuned independently as the project grows
-- schema safety - relational changes are explicit and versioned through Alembic
-- testability - retrieval, ingest, repositories, and orchestration can be tested in
-  isolation
+- clarity - each layer has a clear responsibility
+- maintainability - domain, use cases, transport, persistence, and integrations stay separated
+- replaceability - adapters can change without rewriting the core
+- self-hosting - all core runtime services can run on a single Ubuntu server
+- schema safety - relational changes remain explicit and versioned through Alembic
+- testability - domain and application logic can be tested independently from frameworks
 
-## Future evolution
+## Future Evolution
 
 Likely directions:
 
 - hybrid retrieval
 - reranking
 - richer metadata filtering
-- background synchronization and retry jobs for Qdrant indexing
+- background synchronization and retry jobs for vector indexing
 - operational dashboards and backup tooling
 - support for additional documentation sources
-
-
-
-
-
-
