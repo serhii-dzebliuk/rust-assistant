@@ -1,4 +1,4 @@
-﻿"""FastAPI application wiring for the ASGI entrypoint."""
+"""FastAPI application wiring for the ASGI entrypoint."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from typing import Optional
 from fastapi import FastAPI
 
 from rust_assistant.bootstrap.container import RuntimeContainer, build_container
-from rust_assistant.infrastructure.inbound.api.routers.chat import router as chat_router
-from rust_assistant.infrastructure.inbound.api.routers.search import router as search_router
-from rust_assistant.infrastructure.inbound.api.routers.system import router as system_router
+from rust_assistant.infrastructure.entrypoints.api.routers.chat import router as chat_router
+from rust_assistant.infrastructure.entrypoints.api.routers.search import router as search_router
+from rust_assistant.infrastructure.entrypoints.api.routers.system import router as system_router
 
 logger = logging.getLogger(__name__)
 

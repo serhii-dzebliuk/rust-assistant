@@ -1,4 +1,4 @@
-﻿import shutil
+import shutil
 import uuid
 from collections.abc import Generator
 from pathlib import Path
@@ -16,11 +16,11 @@ def raw_data_dir() -> Path:
 @pytest.fixture
 def page_parser(raw_data_dir: Path) -> Any:
     """Build a parser for integration tests that exercise real sample pages."""
-    from rust_assistant.infrastructure.outbound.parsing.html.page_parser import (
-        PageParser,
+    from rust_assistant.infrastructure.adapters.parsing.html.document_parser import (
+        HtmlDocumentParser,
     )
 
-    return PageParser(raw_data_dir=raw_data_dir)
+    return HtmlDocumentParser(raw_data_dir=raw_data_dir)
 
 
 @pytest.fixture

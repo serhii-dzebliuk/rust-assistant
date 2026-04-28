@@ -1,4 +1,4 @@
-﻿"""Composition-root helpers that turn global settings into concrete runtime wiring."""
+"""Composition-root helpers that turn global settings into concrete runtime wiring."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Optional
 
 from rust_assistant.bootstrap.logging import configure_logging
 from rust_assistant.bootstrap.settings import LoggingSettings, Settings, get_settings
-from rust_assistant.infrastructure.outbound.sqlalchemy.config import SqlAlchemyConfig
+from rust_assistant.infrastructure.adapters.sqlalchemy.config import SqlAlchemyConfig
 
 
 @dataclass(slots=True, frozen=True)

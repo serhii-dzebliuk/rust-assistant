@@ -1,7 +1,7 @@
-﻿import pytest
+import pytest
 
 from rust_assistant import __main__ as package_cli
-from rust_assistant.infrastructure.inbound.cli import ingest as cli_ingest
+from rust_assistant.infrastructure.entrypoints.cli import ingest as cli_ingest
 
 pytestmark = pytest.mark.unit
 
@@ -41,6 +41,16 @@ def test_root_cli_routes_to_ingest_subcommand(monkeypatch):
 def test_root_cli_translates_ingest_errors_into_usage_errors(monkeypatch):
     def fail_run_ingest(**_kwargs):
         raise ValueError("bad options")
+
+    monkeypatch.setattr("rust_assistant.__main__.run_ingest", fail_run_ingest)
+
+    with pytest.raises(SystemExit):
+        package_cli.main(["ingest"])
+
+
+def test_root_cli_translates_tokenizer_errors_into_usage_errors(monkeypatch):
+    def fail_run_ingest(**_kwargs):
+        raise package_cli.IngestTokenizerUnavailableError("tokenizer unavailable")
 
     monkeypatch.setattr("rust_assistant.__main__.run_ingest", fail_run_ingest)
 

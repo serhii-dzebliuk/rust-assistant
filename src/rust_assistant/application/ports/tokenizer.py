@@ -1,21 +1,13 @@
-﻿"""Port for discovering raw source documents for ingest."""
+"""Port for model-compatible token counting."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional, Protocol
-
-from rust_assistant.domain.enums import Crate
+from typing import Protocol
 
 
-class SourceDocumentDiscoveryPort(Protocol):
-    """Discover source documents that should enter the ingest pipeline."""
+class Tokenizer(Protocol):
+    """Count model tokens for plain text."""
 
-    def discover(
-        self,
-        *,
-        crates: Optional[list[Crate]] = None,
-        limit: Optional[int] = None,
-    ) -> list[Path]:
-        """Return discovered raw document paths for the requested crate scope."""
+    def count_tokens(self, text: str) -> int:
+        """Return the number of model tokens in text."""
         ...

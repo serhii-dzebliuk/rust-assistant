@@ -1,26 +1,28 @@
-﻿# Repo guidelines
+# Repo guidelines
 
 ## General
 - Refer to `docs/architecture.md` for current system architecture and component responsibilities before making structural changes.
 
 ## Project Structure & Module Organization
 - Use `src/rust_assistant/` as the main Python package for the `rust-assistant` backend.
-- The project is moving to Clean Hexagonal Architecture. During the transition, new code lives under `src/rust_assistant/`; after migration, `application`, `bootstrap`, `domain`, and `infrastructure` should move directly under `src/rust_assistant/`.
+- The project uses Clean Hexagonal Architecture. The main architectural packages are `application`, `bootstrap`, `domain`, and `infrastructure` directly under `src/rust_assistant/`.
 - Keep `src/rust_assistant/asgi.py` as the public ASGI entrypoint and `src/rust_assistant/__main__.py` as the public CLI entrypoint.
 - Organize the backend by architectural responsibility:
-  - `domain/` — entities, value objects, enums, domain errors, and pure domain policies
-  - `application/` — use cases, application DTOs, and ports for external dependencies
-  - `infrastructure/inbound/` — FastAPI routers, API schemas, CLI commands, jobs, and other inbound adapters
-  - `infrastructure/outbound/` — SQLAlchemy/Postgres, Qdrant, parser, tokenizer, LLM, embedding, filesystem, and other outbound adapters
-  - `bootstrap/` — settings, logging setup, dependency wiring, app creation, and runtime entrypoint orchestration
+  - `domain/` � entities, value objects, enums, domain errors, and pure domain policies
+  - `application/` � use cases, application policies, application DTOs, and ports for external dependencies
+  - `infrastructure/entrypoints/` � FastAPI routers, API schemas, CLI commands, jobs, and other runtime entrypoints
+  - `infrastructure/adapters/` � SQLAlchemy/Postgres, Qdrant, parser, tokenizer, LLM, embedding, filesystem, and other external adapters
+  - `bootstrap/` � settings, logging setup, dependency wiring, app creation, and runtime entrypoint orchestration
 - Keep dependency direction one-way: `domain <- application <- infrastructure`, with `bootstrap` selecting concrete implementations.
 - Keep retrieval concerns separate from persistence concerns:
   - Qdrant is the vector retrieval store
   - Postgres is the source of truth for chunk text, document metadata, and chunk synchronization state
-- Keep LangChain or provider orchestration out of routers; place it in application use cases and outbound adapters behind ports.
-- Keep external provider code behind dedicated outbound adapter modules so orchestration logic is not coupled to one provider SDK.
+- Keep LangChain or provider orchestration out of routers; place it in application use cases and external adapters behind ports.
+- Name use case classes with the UseCase suffix and give them a single execute(command) method that returns a result DTO.
+- Keep pure application-level rules in application/policies/, not inside use case modules or infrastructure adapters.
+- Keep external provider code behind dedicated adapter modules so orchestration logic is not coupled to one provider SDK.
 - Routers and CLI adapters should call application use cases; they must not directly contain retrieval pipelines, database logic, or provider-specific code.
-- Keep database access out of routers, domain policies, application use cases, and generic utility modules; access Postgres through repository/unit-of-work ports and outbound adapters.
+- Keep database access out of routers, domain policies, application use cases, and generic utility modules; access Postgres through repository/unit-of-work ports and adapters.
 - Keep `__init__.py` files only in the main architectural package roots: `application`, `bootstrap`, `domain`, and `infrastructure`. Do not add nested `__init__.py` files unless there is a concrete runtime/tooling requirement, and do not add them only for convenience exports.
 - Keep Docker-related deployment files outside `src/rust_assistant/`, for example:
   - `compose.yaml`
@@ -102,6 +104,7 @@
 - Use `snake_case` for variables, functions, and module names.
 - Use `PascalCase` for classes.
 - Use `UPPER_CASE` for constants.
+- Order class contents by lifecycle and public importance: class attributes/constants, `__init__`, other dunder methods, public methods, then private helpers.
 - Keep functions small and focused on one responsibility.
 - Prefer explicit code over hidden magic or overly compact expressions.
 - Add type hints for function arguments, return values, and important variables where helpful.
@@ -126,7 +129,7 @@
 - Use Python `logging` as the default logging system for the whole project.
 - Do not use `print()` for application logs.
 - Create and use module-level loggers via `logging.getLogger(__name__)`.
-- Keep logging setup centralized in one place, for example `src/rust_assistant/bootstrap/logging.py` during migration and `src/rust_assistant/bootstrap/logging.py` after flattening.
+- Keep logging setup centralized in one place, for example `src/rust_assistant/bootstrap/logging.py`.
 - Configure logging once at application startup.
 - Use consistent log levels:
   - `DEBUG` for detailed developer diagnostics

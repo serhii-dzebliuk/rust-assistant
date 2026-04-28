@@ -1,4 +1,4 @@
-﻿# Database Schema
+# Database Schema
 
 ## Purpose
 
@@ -120,7 +120,8 @@ Columns:
   - example: `4649b0ead394e8d62b96b728619526354aaf7195761f64a2e841bbde6979e73d`
 - `token_count`: `INTEGER NULL`
   - chunk token count computed with the configured embedding model tokenizer
-  - nullable for older rows or ingest runs where `EMBEDDING_MODEL` is not configured
+  - nullable for older rows; new persisted ingest runs require `EMBEDDING_MODEL`
+    and fail before writing chunks if the Hugging Face tokenizer cannot be loaded
   - example: `284`
 - `section_title`: `TEXT NULL`
   - section title that contains the chunk
@@ -163,9 +164,10 @@ Persistence should map current domain names to database names:
 
 1. Parse one local HTML file into a document entity.
 2. Persist document-level fields to `documents`.
-3. Persist derived retrieval chunks to `chunks`.
-4. After PostgreSQL stores `chunks.id`, upsert vectors to Qdrant using those UUID ids.
-5. Qdrant payload stores only lightweight filter metadata, not canonical text.
+3. Count chunk tokens with the configured `EMBEDDING_MODEL` Hugging Face tokenizer.
+4. Persist derived retrieval chunks to `chunks`.
+5. After PostgreSQL stores `chunks.id`, upsert vectors to Qdrant using those UUID ids.
+6. Qdrant payload stores only lightweight filter metadata, not canonical text.
 
 ### Query path
 
@@ -185,8 +187,8 @@ Qdrant payload should stay minimal and omit `chunks.text`. The intended payload 
 ## Source of Truth
 
 This document is the intended source of truth for:
-- SQLAlchemy ORM models in `src/rust_assistant/infrastructure/outbound/sqlalchemy/models.py`
-- repository persistence mapping in `src/rust_assistant/infrastructure/outbound/sqlalchemy/repositories/`
+- SQLAlchemy ORM models in `src/rust_assistant/infrastructure/adapters/sqlalchemy/models.py`
+- repository persistence mapping in `src/rust_assistant/infrastructure/adapters/sqlalchemy/repositories/`
 - Alembic migrations in `alembic/versions/`
 
 ## Rollout Notes

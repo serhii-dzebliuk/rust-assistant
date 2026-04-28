@@ -1,33 +1,45 @@
-﻿from types import TracebackType
-from typing import Optional, Protocol, Type
-
-from rust_assistant.application.ports.repositories.chunk_repository import ChunkRepository
-from rust_assistant.application.ports.repositories.document_repository import DocumentRepository
+﻿from dataclasses import dataclass
+from typing import Any, Optional, Protocol, Sequence
+from uuid import UUID
 
 
-class UnitOfWork(Protocol):
-    """Transaction boundary that owns session lifetime and exposes session-bound repositories."""
-    documents: DocumentRepository
-    chunks: ChunkRepository
+@dataclass(frozen=True)
+class VectorPayload:
+    document_id: UUID
 
-    async def __aenter__(self) -> "UnitOfWork":
-        """Open a unit-of-work scope and bind repositories to one session."""
+    crate: Optional[str] = None
+    item_type: Optional[str] = None
+    item_path: Optional[str] = None
+    section_title: Optional[str] = None
+    chunk_index: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class VectorPoint:
+    chunk_id: UUID
+    vector: list[float]
+    payload: VectorPayload
+
+
+@dataclass(frozen=True)
+class VectorSearchHit:
+    chunk_id: UUID
+    score: float
+    payload: VectorPayload
+
+
+class VectorStorage(Protocol):
+    async def recreate_collection(self) -> None:
         ...
 
-    async def __aexit__(
+    async def upsert_vectors(self, points: Sequence[VectorPoint]) -> None:
+        ...
+
+    async def search(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
-    ) -> Optional[bool]:
-        """Close the unit-of-work scope and dispose of repository session state."""
-        ...
-
-
-    async def commit(self) -> None:
-        """Commit the transaction owned by this unit of work."""
-        ...
-
-    async def rollback(self) -> None:
-        """Rollback the transaction owned by this unit of work."""
+        query_vector: list[float],
+        limit: int,
+        score_threshold: Optional[float] = None,
+        filters: Optional[dict[str, Any]] = None,
+    ) -> list[VectorSearchHit]:
         ...

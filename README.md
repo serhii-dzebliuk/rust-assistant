@@ -99,6 +99,10 @@ Typical groups of settings:
 
 Keep real secrets out of version control. Use `.env.example` as the reference for required variables.
 
+Persisted ingest requires `EMBEDDING_MODEL` to be set to a Hugging Face-compatible
+model/tokenizer name. The ingest flow uses that tokenizer through `transformers` to
+populate `chunks.token_count` before writing chunks to PostgreSQL.
+
 ## Testing
 
 The project uses:

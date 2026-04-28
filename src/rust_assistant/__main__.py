@@ -1,4 +1,4 @@
-﻿"""Public package CLI entrypoint."""
+"""Public package CLI entrypoint."""
 
 from __future__ import annotations
 
@@ -6,8 +6,13 @@ import argparse
 from collections.abc import Sequence
 from typing import Optional
 
-from rust_assistant.bootstrap.ingest import IngestDatabaseUnavailableError, run_ingest
-from rust_assistant.infrastructure.inbound.cli.ingest import (
+from rust_assistant.bootstrap.ingest import (
+    IngestConfigurationError,
+    IngestDatabaseUnavailableError,
+    IngestTokenizerUnavailableError,
+    run_ingest,
+)
+from rust_assistant.infrastructure.entrypoints.cli.ingest import (
     ingest_kwargs_from_args,
     register_ingest_subcommand,
 )
@@ -29,7 +34,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "ingest":
         try:
             return run_ingest(**ingest_kwargs_from_args(args))
-        except (IngestDatabaseUnavailableError, ValueError) as exc:
+        except (
+            IngestConfigurationError,
+            IngestDatabaseUnavailableError,
+            IngestTokenizerUnavailableError,
+            ValueError,
+        ) as exc:
             parser.error(str(exc))
 
     parser.error(f"Unknown command: {args.command}")

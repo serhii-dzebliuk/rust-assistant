@@ -1,4 +1,4 @@
-﻿"""Ingest runtime wiring and orchestration."""
+"""Ingest runtime wiring and orchestration."""
 
 from __future__ import annotations
 
@@ -10,32 +10,36 @@ from typing import Optional
 
 from rust_assistant.application.dto.ingest_pipeline import IngestPipelineArtifacts
 from rust_assistant.application.use_cases.ingest.discover_documents import (
-    DiscoverDocuments,
+    DiscoverDocumentsUseCase,
 )
-from rust_assistant.application.use_cases.ingest.parse_documents import ParseDocuments
+from rust_assistant.application.use_cases.ingest.parse_documents import ParseDocumentsUseCase
 from rust_assistant.application.use_cases.ingest.rebuild_knowledge_base import (
-    RebuildKnowledgeBase,
+    RebuildKnowledgeBaseCommand,
     RebuildKnowledgeBaseResult,
+    RebuildKnowledgeBaseUseCase,
 )
-from rust_assistant.application.use_cases.ingest.run_ingest_pipeline import (
-    RunIngestPipeline,
+from rust_assistant.application.use_cases.ingest.ingest_documents import (
+    IngestDocumentsCommand,
+    IngestDocumentsUseCase,
 )
 from rust_assistant.bootstrap.container import build_container_with_log_level
 from rust_assistant.bootstrap.settings import Settings
 from rust_assistant.domain.enums import Crate
-from rust_assistant.infrastructure.outbound.parsing.html.page_parser import PageParser
-from rust_assistant.infrastructure.outbound.raw_docs.discovery import DocumentDiscoverer
-from rust_assistant.infrastructure.outbound.sqlalchemy.config import SqlAlchemyConfig
-from rust_assistant.infrastructure.outbound.sqlalchemy.session import (
+from rust_assistant.infrastructure.adapters.parsing.html.document_parser import (
+    HtmlDocumentParser,
+)
+from rust_assistant.infrastructure.adapters.raw_docs.document_discoverer import (
+    RawDocsDocumentDiscoverer,
+)
+from rust_assistant.infrastructure.adapters.sqlalchemy.config import SqlAlchemyConfig
+from rust_assistant.infrastructure.adapters.sqlalchemy.session import (
     build_async_engine,
     build_session_factory,
     database_is_ready,
     dispose_engine,
 )
-from rust_assistant.infrastructure.outbound.sqlalchemy.uow import SqlAlchemyUnitOfWork
-from rust_assistant.infrastructure.outbound.tokenizers.transformers_chunk_counter import (
-    TransformersChunkTokenCounter,
-)
+from rust_assistant.infrastructure.adapters.sqlalchemy.uow import SqlAlchemyUnitOfWork
+from rust_assistant.infrastructure.adapters.transformers.tokenizer import TransformersTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,14 @@ IngestPersistenceResult = RebuildKnowledgeBaseResult
 
 class IngestDatabaseUnavailableError(RuntimeError):
     """Raised when the ingest runtime cannot reach PostgreSQL."""
+
+
+class IngestConfigurationError(ValueError):
+    """Raised when persisted ingest is missing required configuration."""
+
+
+class IngestTokenizerUnavailableError(RuntimeError):
+    """Raised when the embedding tokenizer cannot be loaded for persisted ingest."""
 
 
 def _resolve_raw_docs_dir(settings: Settings) -> Path:
@@ -109,22 +121,28 @@ def _validate_options(*, stage: str, persist: bool, limit: Optional[int]) -> Non
         )
 
 
-def _build_chunk_token_counter(settings: Settings) -> Optional[TransformersChunkTokenCounter]:
-    """Build a token counter when an embedding model is configured."""
+def _build_tokenizer(settings: Settings) -> TransformersTokenizer:
+    """Build the mandatory embedding-model tokenizer for persisted ingest."""
     embedding_model = settings.embedding.model
     if embedding_model is None:
-        logger.warning(
-            "EMBEDDING_MODEL is not configured; chunk token_count will be stored as NULL"
+        raise IngestConfigurationError(
+            "EMBEDDING_MODEL must be configured before persisted ingest can count chunk tokens"
         )
-        return None
-    return TransformersChunkTokenCounter.from_model_name(embedding_model)
+
+    try:
+        return TransformersTokenizer(embedding_model)
+    except Exception as exc:
+        raise IngestTokenizerUnavailableError(
+            "Could not load Hugging Face tokenizer for EMBEDDING_MODEL "
+            f"{embedding_model!r}; persisted ingest requires token_count values"
+        ) from exc
 
 
-def _build_pipeline(*, raw_docs_dir: Path) -> RunIngestPipeline:
+def _build_pipeline(*, raw_docs_dir: Path) -> IngestDocumentsUseCase:
     """Build the ingest pipeline use case with filesystem-backed adapters."""
-    return RunIngestPipeline(
-        discover_documents=DiscoverDocuments(DocumentDiscoverer(raw_docs_dir)),
-        parse_documents=ParseDocuments(PageParser(raw_docs_dir)),
+    return IngestDocumentsUseCase(
+        discover_documents=DiscoverDocumentsUseCase(RawDocsDocumentDiscoverer(raw_docs_dir)),
+        parse_documents=ParseDocumentsUseCase(HtmlDocumentParser(raw_docs_dir)),
     )
 
 
@@ -138,13 +156,16 @@ def _run_pipeline_artifacts(
     min_chunk_chars: int,
 ) -> IngestPipelineArtifacts:
     """Execute the ingest application pipeline and return all stage artifacts."""
-    return _build_pipeline(raw_docs_dir=raw_docs_dir).execute(
-        stage=stage,
-        crates=crates,
-        limit=limit,
-        max_chunk_chars=max_chunk_chars,
-        min_chunk_chars=min_chunk_chars,
+    result = _build_pipeline(raw_docs_dir=raw_docs_dir).execute(
+        IngestDocumentsCommand(
+            stage=stage,
+            crates=crates,
+            limit=limit,
+            max_chunk_chars=max_chunk_chars,
+            min_chunk_chars=min_chunk_chars,
+        )
     )
+    return result.artifacts
 
 
 async def _persist_after_pipeline(
@@ -161,11 +182,14 @@ async def _persist_after_pipeline(
             raise IngestDatabaseUnavailableError(
                 "DATABASE_URL must point to a reachable PostgreSQL database"
             )
-        token_counter = _build_chunk_token_counter(settings)
-        return await RebuildKnowledgeBase().execute(
-            artifacts=artifacts,
+        tokenizer = _build_tokenizer(settings)
+        return await RebuildKnowledgeBaseUseCase(
             uow=SqlAlchemyUnitOfWork(session_factory),
-            token_counter=token_counter,
+            tokenizer=tokenizer,
+        ).execute(
+            RebuildKnowledgeBaseCommand(
+                artifacts=artifacts,
+            )
         )
     finally:
         await dispose_engine(db_engine)

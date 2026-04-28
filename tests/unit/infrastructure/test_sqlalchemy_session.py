@@ -1,7 +1,7 @@
-﻿import pytest
+import pytest
 
-from rust_assistant.infrastructure.outbound.sqlalchemy.config import SqlAlchemyConfig
-from rust_assistant.infrastructure.outbound.sqlalchemy.session import (
+from rust_assistant.infrastructure.adapters.sqlalchemy.config import SqlAlchemyConfig
+from rust_assistant.infrastructure.adapters.sqlalchemy.session import (
     build_async_engine,
     build_session_factory,
 )

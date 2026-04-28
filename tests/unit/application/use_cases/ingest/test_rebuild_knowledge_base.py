@@ -1,11 +1,12 @@
-﻿import asyncio
+import asyncio
 from dataclasses import replace
 
 import pytest
 
 from rust_assistant.application.dto.ingest_pipeline import IngestPipelineArtifacts
 from rust_assistant.application.use_cases.ingest.rebuild_knowledge_base import (
-    RebuildKnowledgeBase,
+    RebuildKnowledgeBaseCommand,
+    RebuildKnowledgeBaseUseCase,
 )
 from rust_assistant.domain.entities.chunks import Chunk
 from rust_assistant.domain.entities.documents import Document
@@ -53,14 +54,14 @@ class FakeUnitOfWork:
         return None
 
 
-class FakeTokenCounter:
+class FakeTokenizer:
     def __init__(self, token_count):
         self.token_count = token_count
-        self.chunks = None
+        self.texts = []
 
-    def with_token_counts(self, chunks):
-        self.chunks = list(chunks)
-        return [replace(chunk, token_count=self.token_count) for chunk in chunks]
+    def count_tokens(self, text):
+        self.texts.append(text)
+        return self.token_count
 
 
 def _document() -> Document:
@@ -96,14 +97,17 @@ def _chunk() -> Chunk:
 def test_persist_ingest_artifacts_persists_documents_and_chunks_to_postgres():
     chunk_repository = FakeChunkRepository()
     document_repository = FakeDocumentRepository()
+    tokenizer = FakeTokenizer(token_count=3)
+    uow = FakeUnitOfWork(document_repository, chunk_repository)
 
     result = asyncio.run(
-        RebuildKnowledgeBase().execute(
-            artifacts=IngestPipelineArtifacts(
-                deduped_docs=[_document()],
-                deduped_chunks=[_chunk()],
-            ),
-            uow=FakeUnitOfWork(document_repository, chunk_repository),
+        RebuildKnowledgeBaseUseCase(uow=uow, tokenizer=tokenizer).execute(
+            RebuildKnowledgeBaseCommand(
+                artifacts=IngestPipelineArtifacts(
+                    deduped_docs=[_document()],
+                    deduped_chunks=[_chunk()],
+                ),
+            )
         )
     )
 
@@ -114,35 +118,40 @@ def test_persist_ingest_artifacts_persists_documents_and_chunks_to_postgres():
     assert result.deleted_chunk_count == 0
     assert document_repository.deleted_all is True
     assert document_repository.documents == [_document()]
-    assert chunk_repository.chunks == [_chunk()]
+    assert chunk_repository.chunks == [replace(_chunk(), token_count=3)]
 
 
 def test_persist_ingest_artifacts_counts_chunk_tokens_before_postgres_upsert():
     chunk_repository = FakeChunkRepository()
     document_repository = FakeDocumentRepository()
-    token_counter = FakeTokenCounter(token_count=4)
+    tokenizer = FakeTokenizer(token_count=4)
+    uow = FakeUnitOfWork(document_repository, chunk_repository)
 
     asyncio.run(
-        RebuildKnowledgeBase().execute(
-            artifacts=IngestPipelineArtifacts(
-                deduped_docs=[_document()],
-                deduped_chunks=[_chunk()],
-            ),
-            uow=FakeUnitOfWork(document_repository, chunk_repository),
-            token_counter=token_counter,
+        RebuildKnowledgeBaseUseCase(uow=uow, tokenizer=tokenizer).execute(
+            RebuildKnowledgeBaseCommand(
+                artifacts=IngestPipelineArtifacts(
+                    deduped_docs=[_document()],
+                    deduped_chunks=[_chunk()],
+                ),
+            )
         )
     )
 
-    assert token_counter.chunks == [_chunk()]
+    assert tokenizer.texts == ["Returns a Future."]
     assert chunk_repository.chunks[0].token_count == 4
 
 
 def test_persist_ingest_artifacts_refuses_empty_replace_payload():
     with pytest.raises(ValueError, match="zero documents"):
         asyncio.run(
-            RebuildKnowledgeBase().execute(
-                artifacts=IngestPipelineArtifacts(),
+            RebuildKnowledgeBaseUseCase(
                 uow=FakeUnitOfWork(FakeDocumentRepository(), FakeChunkRepository()),
+                tokenizer=FakeTokenizer(token_count=1),
+            ).execute(
+                RebuildKnowledgeBaseCommand(
+                    artifacts=IngestPipelineArtifacts(),
+                )
             )
         )
 
@@ -152,12 +161,16 @@ def test_persist_ingest_artifacts_refuses_documents_without_chunks():
 
     with pytest.raises(ValueError, match="documents without chunks"):
         asyncio.run(
-            RebuildKnowledgeBase().execute(
-                artifacts=IngestPipelineArtifacts(
-                    deduped_docs=[_document()],
-                    deduped_chunks=[chunk],
-                ),
+            RebuildKnowledgeBaseUseCase(
                 uow=FakeUnitOfWork(FakeDocumentRepository(), FakeChunkRepository()),
+                tokenizer=FakeTokenizer(token_count=1),
+            ).execute(
+                RebuildKnowledgeBaseCommand(
+                    artifacts=IngestPipelineArtifacts(
+                        deduped_docs=[_document()],
+                        deduped_chunks=[chunk],
+                    ),
+                )
             )
         )
 
@@ -167,11 +180,15 @@ def test_persist_ingest_artifacts_refuses_chunks_without_matching_documents():
 
     with pytest.raises(ValueError, match="chunks without matching documents"):
         asyncio.run(
-            RebuildKnowledgeBase().execute(
-                artifacts=IngestPipelineArtifacts(
-                    deduped_docs=[_document()],
-                    deduped_chunks=[_chunk(), chunk],
-                ),
+            RebuildKnowledgeBaseUseCase(
                 uow=FakeUnitOfWork(FakeDocumentRepository(), FakeChunkRepository()),
+                tokenizer=FakeTokenizer(token_count=1),
+            ).execute(
+                RebuildKnowledgeBaseCommand(
+                    artifacts=IngestPipelineArtifacts(
+                        deduped_docs=[_document()],
+                        deduped_chunks=[_chunk(), chunk],
+                    ),
+                )
             )
         )

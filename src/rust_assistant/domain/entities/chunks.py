@@ -37,21 +37,6 @@ class Chunk:
     token_count: Optional[int] = None
     text_hash: str = ""
 
-    @staticmethod
-    def compute_text_hash(text: str) -> str:
-        """Compute a normalized text hash for deduplication."""
-
-        normalized = " ".join(text.lower().split())
-        return hashlib.sha256(normalized.encode()).hexdigest()
-
-    @property
-    def section_title(self) -> Optional[str]:
-        """Return the most specific section heading when available."""
-
-        if not self.section_path:
-            return None
-        return self.section_path[-1]
-
     def __post_init__(self) -> None:
         """Validate fields and populate derived values."""
 
@@ -74,3 +59,18 @@ class Chunk:
         object.__setattr__(self, "section_path", tuple(self.section_path))
         if not self.text_hash:
             object.__setattr__(self, "text_hash", self.compute_text_hash(self.text))
+
+    @staticmethod
+    def compute_text_hash(text: str) -> str:
+        """Compute a normalized text hash for deduplication."""
+
+        normalized = " ".join(text.lower().split())
+        return hashlib.sha256(normalized.encode()).hexdigest()
+
+    @property
+    def section_title(self) -> Optional[str]:
+        """Return the most specific section heading when available."""
+
+        if not self.section_path:
+            return None
+        return self.section_path[-1]

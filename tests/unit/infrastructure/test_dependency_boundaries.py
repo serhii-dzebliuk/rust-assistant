@@ -9,7 +9,6 @@ def test_infrastructure_modules_do_not_import_bootstrap_settings_directly():
     repo_root = Path(__file__).resolve().parents[3]
     infrastructure_roots = [
         repo_root / "src" / "rust_assistant" / "infrastructure",
-        repo_root / "src" / "rust_assistant" / "NEW" / "infrastructure",
     ]
 
     for infrastructure_root in infrastructure_roots:
@@ -17,5 +16,4 @@ def test_infrastructure_modules_do_not_import_bootstrap_settings_directly():
             continue
         for path in infrastructure_root.rglob("*.py"):
             source = path.read_text(encoding="utf-8")
-            assert "rust_assistant.bootstrap" not in source
             assert "rust_assistant.bootstrap" not in source

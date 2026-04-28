@@ -1,4 +1,4 @@
-﻿# Architecture Overview
+# Architecture Overview
 
 ## Purpose
 
@@ -56,6 +56,7 @@ Typical contents:
 
 Typical contents:
 - `use_cases/` for chat, search, ingest, and related orchestration
+- `policies/` for application-level rules that are not stable domain-wide rules
 - `ports/` for contracts such as `LLMClient`, `InferenceClient`, `Tokenizer`,
   `VectorStore`, `DocumentRepository`, and `ChunkRepository`
 - `dto/` for internal input/output models used by use cases
@@ -63,16 +64,21 @@ Typical contents:
 `application` depends on `domain` and on port abstractions only. It does not import
 concrete adapters or framework-specific code.
 
+Use cases follow a command/result pattern:
+- class names end with `UseCase`
+- `execute(...)` receives one command DTO
+- `execute(...)` returns one result DTO
+
 ### Infrastructure
 
 `infrastructure` contains all adapters around the application core.
 
-Inbound adapters receive external input and call use cases:
+Entrypoints receive external input and call use cases:
 - HTTP API
 - CLI commands
 - background jobs and ingest entrypoints
 
-Outbound adapters implement ports and integrate with external systems:
+Adapters implement ports and integrate with external systems:
 - PostgreSQL and SQLAlchemy
 - Qdrant
 - LLM and inference providers such as OpenAI
@@ -97,25 +103,25 @@ The target package layout is:
 src/rust_assistant/
   asgi.py
   __main__.py
-  NEW/
-    domain/
-    application/
-      ports/
-      use_cases/
-      dto/
-    infrastructure/
-      inbound/
-        api/
-          routers/
-          schemas/
-        cli/
-      outbound/
-    bootstrap/
-      settings.py
-      logging.py
-      container.py
-      api.py
-      ingest.py
+  domain/
+  application/
+    ports/
+    use_cases/
+    policies/
+    dto/
+  infrastructure/
+    entrypoints/
+      api/
+        routers/
+        schemas/
+      cli/
+    adapters/
+  bootstrap/
+    settings.py
+    logging.py
+    container.py
+    api.py
+    ingest.py
 
 alembic/
   env.py
@@ -129,13 +135,15 @@ Responsibilities:
 - `src/rust_assistant/__main__.py` - public package CLI entrypoint
 - `src/rust_assistant/domain/` - domain entities, value objects, enums, policies, and
   domain errors
-- `src/rust_assistant/application/ports/` - contracts for outbound dependencies
+- `src/rust_assistant/application/ports/` - contracts for external dependencies
 - `src/rust_assistant/application/use_cases/` - scenario orchestration for chat,
   search, ingest, and related operations
+- `src/rust_assistant/application/policies/` - application-level rules used by use
+  cases and adapter mapping logic
 - `src/rust_assistant/application/dto/` - internal request/result models for use cases
-- `src/rust_assistant/infrastructure/inbound/api/` - FastAPI routers and HTTP schemas
-- `src/rust_assistant/infrastructure/inbound/cli/` - CLI and job entrypoints
-- `src/rust_assistant/infrastructure/outbound/` - SQLAlchemy, Qdrant, OpenAI,
+- `src/rust_assistant/infrastructure/entrypoints/api/` - FastAPI routers and HTTP schemas
+- `src/rust_assistant/infrastructure/entrypoints/cli/` - CLI and job entrypoints
+- `src/rust_assistant/infrastructure/adapters/` - SQLAlchemy, Qdrant, OpenAI,
   tokenizer, and other adapter implementations
 - `src/rust_assistant/bootstrap/` - centralized settings, logging, and dependency
   wiring
@@ -153,9 +161,9 @@ The architecture keeps internal models separate from transport and persistence m
 
 Rules:
 - `application/dto` is the only place for use-case input/output models
-- `infrastructure/inbound/api/schemas` is only for external HTTP request and response
+- `infrastructure/entrypoints/api/schemas` is only for external HTTP request and response
   models
-- `infrastructure/outbound/.../models` is only for ORM or adapter-specific persistence
+- `infrastructure/adapters/.../models` is only for ORM or adapter-specific persistence
   mappings
 
 This separation prevents framework-specific structures from leaking into the core.
@@ -173,7 +181,7 @@ Responsibilities:
 
 ### FastAPI API adapter
 
-FastAPI is an inbound adapter in `infrastructure/inbound/api/`.
+FastAPI is an entrypoint in `infrastructure/entrypoints/api/`.
 
 Responsibilities:
 - expose HTTP endpoints
@@ -185,7 +193,7 @@ FastAPI is not part of the application core.
 
 ### PostgreSQL and SQLAlchemy persistence adapter
 
-PostgreSQL is the canonical relational store. SQLAlchemy is the outbound persistence
+PostgreSQL is the canonical relational store. SQLAlchemy is the persistence
 adapter used to access it.
 
 Responsibilities:
@@ -209,7 +217,7 @@ Alembic is the supported mechanism for shared schema changes.
 
 ### Qdrant vector adapter
 
-Qdrant is the outbound vector storage and retrieval adapter.
+Qdrant is the vector storage and retrieval adapter.
 
 Responsibilities:
 - store embeddings
@@ -220,7 +228,7 @@ Qdrant is not the source of truth for chunk text.
 
 ### LLM, inference, and tokenizer adapters
 
-LLM providers, inference clients, and tokenizers are outbound adapters behind
+LLM providers, inference clients, and tokenizers are adapters behind
 application ports.
 
 Responsibilities:
@@ -268,7 +276,7 @@ This split keeps retrieval fast while preserving a clean canonical data store.
 
 ## Persistence and Migrations
 
-All PostgreSQL access should go through outbound adapters that implement application
+All PostgreSQL access should go through adapters that implement application
 repository ports.
 
 ### Persistence boundaries
@@ -328,13 +336,15 @@ Migration rules:
 
 ### Ingest flow
 
-1. An inbound adapter triggers the ingest use case from CLI, a job, or another entrypoint.
+1. An entrypoint triggers the ingest use case from CLI, a job, or another entrypoint.
 2. The application ingest use case loads and parses raw documentation inputs.
 3. Domain rules normalize content, metadata, and chunk structure.
 4. The use case calls repository, tokenizer, and vector-storage ports.
-5. Outbound adapters persist canonical documents and chunks to PostgreSQL.
-6. Outbound adapters generate embeddings and synchronize vectors to Qdrant.
-7. The use case records synchronization outcomes through repository ports when needed.
+5. Before persisted writes, the configured embedding-model Hugging Face tokenizer
+   populates chunk token counts through the tokenizer port.
+6. Adapters persist canonical documents and chunks to PostgreSQL.
+7. Adapters generate embeddings and synchronize vectors to Qdrant.
+8. The use case records synchronization outcomes through repository ports when needed.
 
 Design goals:
 - reproducible
@@ -348,7 +358,7 @@ Design goals:
 2. The FastAPI router validates the request and maps it into an application DTO.
 3. The router calls the relevant search or chat use case.
 4. The use case calls vector-store, repository, inference, and LLM ports as needed.
-5. Outbound adapters query Qdrant and load canonical text and metadata from PostgreSQL.
+5. Adapters query Qdrant and load canonical text and metadata from PostgreSQL.
 6. The use case assembles grounded context and produces an application result DTO.
 7. The HTTP adapter maps the result DTO into an API response schema.
 
@@ -359,8 +369,8 @@ ensuring the LLM answer is grounded in retrieved documentation.
 
 - `domain` does not import `application`, `infrastructure`, or `bootstrap`
 - `application` imports `domain` and port abstractions, not concrete adapters
-- `infrastructure/outbound` implements application ports
-- `infrastructure/inbound` invokes use cases and maps external request/response models
+- `infrastructure/adapters` implements application ports
+- `infrastructure/entrypoints` invokes use cases and maps external request/response models
 - `bootstrap` owns configuration and dependency assembly
 - API schemas are not application DTOs
 - ORM models are not domain models
@@ -374,8 +384,9 @@ Rule of placement for new code:
 - dependency contract -> `application/ports`
 - use-case input/output -> `application/dto`
 - use-case orchestration -> `application/use_cases`
-- FastAPI, CLI, jobs -> `infrastructure/inbound`
-- OpenAI, Qdrant, SQLAlchemy, `tiktoken`, filesystem integrations -> `infrastructure/outbound`
+- application-level policy -> `application/policies`
+- FastAPI, CLI, jobs -> `infrastructure/entrypoints`
+- OpenAI, Qdrant, SQLAlchemy, `tiktoken`, filesystem integrations -> `infrastructure/adapters`
 - config and wiring -> `bootstrap`
 
 ## Deployment Model
