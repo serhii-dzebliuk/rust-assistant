@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from rust_assistant.domain.enums import Crate
-from rust_assistant.infrastructure.adapters.raw_docs.document_discoverer import (
+from rust_assistant.infrastructure.adapters.data_source.filesystem.document_discoverer import (
     RawDocsDocumentDiscoverer,
 )
 

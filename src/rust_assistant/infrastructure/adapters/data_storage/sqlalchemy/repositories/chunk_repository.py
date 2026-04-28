@@ -12,12 +12,12 @@ from sqlalchemy.orm import joinedload
 from rust_assistant.application.dto.chunk_context import ChunkContext
 from rust_assistant.domain.entities.chunks import Chunk
 from rust_assistant.domain.value_objects.identifiers import ChunkId, DocumentId
-from rust_assistant.infrastructure.adapters.sqlalchemy.mappers import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.mappers import (
     map_chunk_context_from_record,
     map_chunk_from_domain,
     map_chunk_to_domain,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.models import ChunkRecord, DocumentRecord
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.models import ChunkRecord, DocumentRecord
 
 
 class SqlAlchemyChunkRepository:

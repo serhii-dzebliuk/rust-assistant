@@ -9,7 +9,7 @@ from sqlalchemy import BigInteger, ForeignKey, Identity, Integer, Text, UniqueCo
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from rust_assistant.infrastructure.adapters.sqlalchemy.base import Base
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.base import Base
 
 
 class DocumentRecord(Base):

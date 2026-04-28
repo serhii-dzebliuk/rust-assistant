@@ -18,7 +18,7 @@ from rust_assistant.domain.value_objects.structured_blocks import (
     BlockType,
     StructuredBlock,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.models import ChunkRecord, DocumentRecord
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.models import ChunkRecord, DocumentRecord
 
 
 def map_document_to_domain(document: DocumentRecord) -> Document:

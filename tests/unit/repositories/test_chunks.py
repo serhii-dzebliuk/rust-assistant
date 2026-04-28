@@ -7,9 +7,9 @@ from rust_assistant.application.dto.chunk_context import ChunkContext
 from rust_assistant.domain.entities.chunks import Chunk
 from rust_assistant.domain.enums import Crate, ItemType
 from rust_assistant.domain.value_objects.identifiers import build_chunk_id, build_document_id
-from rust_assistant.infrastructure.adapters.sqlalchemy.mappers import map_chunk_to_domain
-from rust_assistant.infrastructure.adapters.sqlalchemy.models import ChunkRecord, DocumentRecord
-from rust_assistant.infrastructure.adapters.sqlalchemy.repositories.chunk_repository import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.mappers import map_chunk_to_domain
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.models import ChunkRecord, DocumentRecord
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.repositories.chunk_repository import (
     SqlAlchemyChunkRepository,
 )
 

@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-from rust_assistant.infrastructure.adapters.sqlalchemy.config import SqlAlchemyConfig
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.config import SqlAlchemyConfig
 
 
 AsyncSessionFactory = async_sessionmaker[AsyncSession]

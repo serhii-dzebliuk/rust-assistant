@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rust_assistant.domain.entities.documents import Document
 from rust_assistant.domain.value_objects.identifiers import DocumentId
-from rust_assistant.infrastructure.adapters.sqlalchemy.mappers import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.mappers import (
     map_document_from_domain,
     map_document_to_domain,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.models import DocumentRecord
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.models import DocumentRecord
 
 
 class SqlAlchemyDocumentRepository:

@@ -6,13 +6,13 @@ import pytest
 from rust_assistant.domain.entities.documents import Document
 from rust_assistant.domain.enums import Crate, ItemType
 from rust_assistant.domain.value_objects.identifiers import build_document_id
-from rust_assistant.infrastructure.adapters.sqlalchemy.mappers import map_document_to_domain
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.mappers import map_document_to_domain
 from rust_assistant.domain.value_objects.structured_blocks import (
     BlockType,
     StructuredBlock,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.models import DocumentRecord
-from rust_assistant.infrastructure.adapters.sqlalchemy.repositories.document_repository import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.models import DocumentRecord
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.repositories.document_repository import (
     SqlAlchemyDocumentRepository,
 )
 

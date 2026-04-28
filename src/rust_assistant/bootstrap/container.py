@@ -7,7 +7,7 @@ from typing import Optional
 
 from rust_assistant.bootstrap.logging import configure_logging
 from rust_assistant.bootstrap.settings import LoggingSettings, Settings, get_settings
-from rust_assistant.infrastructure.adapters.sqlalchemy.config import SqlAlchemyConfig
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.config import SqlAlchemyConfig
 
 
 @dataclass(slots=True, frozen=True)

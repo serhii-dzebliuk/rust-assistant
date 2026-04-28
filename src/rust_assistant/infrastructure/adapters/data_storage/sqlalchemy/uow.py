@@ -10,13 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rust_assistant.application.ports.repositories.chunk_repository import ChunkRepository
 from rust_assistant.application.ports.repositories.document_repository import DocumentRepository
 from rust_assistant.application.ports.uow import UnitOfWork
-from rust_assistant.infrastructure.adapters.sqlalchemy.repositories.chunk_repository import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.repositories.chunk_repository import (
     SqlAlchemyChunkRepository,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.repositories.document_repository import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.repositories.document_repository import (
     SqlAlchemyDocumentRepository,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.session import AsyncSessionFactory
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.session import AsyncSessionFactory
 
 
 class SqlAlchemyUnitOfWork(UnitOfWork):

@@ -28,18 +28,20 @@ from rust_assistant.domain.enums import Crate
 from rust_assistant.infrastructure.adapters.parsing.html.document_parser import (
     HtmlDocumentParser,
 )
-from rust_assistant.infrastructure.adapters.raw_docs.document_discoverer import (
+from rust_assistant.infrastructure.adapters.data_source.filesystem.document_discoverer import (
     RawDocsDocumentDiscoverer,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.config import SqlAlchemyConfig
-from rust_assistant.infrastructure.adapters.sqlalchemy.session import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.config import SqlAlchemyConfig
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.session import (
     build_async_engine,
     build_session_factory,
     database_is_ready,
     dispose_engine,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.uow import SqlAlchemyUnitOfWork
-from rust_assistant.infrastructure.adapters.transformers.tokenizer import TransformersTokenizer
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.uow import SqlAlchemyUnitOfWork
+from rust_assistant.infrastructure.adapters.tokenization.transformers.transformers_tokenizer import (
+    TransformersTokenizer,
+)
 
 logger = logging.getLogger(__name__)
 

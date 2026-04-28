@@ -10,10 +10,10 @@ from rust_assistant.application.use_cases.ingest.rebuild_knowledge_base import (
     RebuildKnowledgeBaseUseCase,
     RebuildKnowledgeBaseResult,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.config import SqlAlchemyConfig
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.config import SqlAlchemyConfig
 from rust_assistant.bootstrap.ingest import _persist_after_pipeline
 from rust_assistant.bootstrap.settings import get_settings
-from rust_assistant.infrastructure.adapters.sqlalchemy.session import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.session import (
     build_async_engine,
     build_session_factory,
     database_is_ready,
@@ -22,11 +22,11 @@ from rust_assistant.infrastructure.adapters.sqlalchemy.session import (
 from rust_assistant.domain.entities.chunks import Chunk
 from rust_assistant.domain.entities.documents import Document
 from rust_assistant.domain.enums import Crate, ItemType
-from rust_assistant.infrastructure.adapters.sqlalchemy.models import (
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.models import (
     ChunkRecord,
     DocumentRecord,
 )
-from rust_assistant.infrastructure.adapters.sqlalchemy.uow import SqlAlchemyUnitOfWork
+from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.uow import SqlAlchemyUnitOfWork
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 

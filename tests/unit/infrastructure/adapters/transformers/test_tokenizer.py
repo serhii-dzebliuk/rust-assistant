@@ -2,7 +2,9 @@ import sys
 
 import pytest
 
-from rust_assistant.infrastructure.adapters.transformers.tokenizer import TransformersTokenizer
+from rust_assistant.infrastructure.adapters.tokenization.transformers.transformers_tokenizer import (
+    TransformersTokenizer,
+)
 
 pytestmark = pytest.mark.unit
 
