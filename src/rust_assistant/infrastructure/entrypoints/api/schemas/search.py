@@ -1,12 +1,11 @@
-﻿"""Search endpoint schemas."""
+"""Search endpoint schemas."""
 
 from __future__ import annotations
 
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
-
-from rust_assistant.application.dto.search import SearchFilters, SearchHit
 
 
 class SearchRequest(BaseModel):
@@ -14,7 +13,6 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000)
     k: int = Field(default=5, ge=1, le=50)
-    filters: Optional[SearchFilters] = None
 
     @field_validator("query")
     @classmethod
@@ -23,6 +21,23 @@ class SearchRequest(BaseModel):
         if not value or not value.strip():
             raise ValueError("Query cannot be empty")
         return value.strip()
+
+
+class SearchHit(BaseModel):
+    """One hydrated search hit returned to the API client."""
+
+    chunk_id: UUID
+    document_id: UUID
+    title: str
+    source_path: str
+    url: str
+    section: Optional[str] = None
+    item_path: Optional[str] = None
+    crate: Optional[str] = None
+    item_type: Optional[str] = None
+    rust_version: Optional[str] = None
+    score: float
+    text: str
 
 
 class SearchResponse(BaseModel):

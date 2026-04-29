@@ -11,7 +11,6 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.app.host == "0.0.0.0"
     assert settings.app.port == 8000
     assert settings.app.reload is False
-    assert settings.app.api_mode == "stub"
     assert settings.dependencies.postgres == "not_configured"
     assert settings.dependencies.qdrant == "not_configured"
     assert settings.postgres.echo is False
@@ -41,7 +40,6 @@ def test_build_settings_parses_explicit_values():
             "HOST": "127.0.0.1",
             "PORT": "9000",
             "RELOAD": "true",
-            "API_MODE": "runtime",
             "POSTGRES_STATUS": "ready",
             "QDRANT_STATUS": "connected",
             "LOG_LEVEL": "DEBUG",
@@ -79,7 +77,6 @@ def test_build_settings_parses_explicit_values():
     assert settings.app.host == "127.0.0.1"
     assert settings.app.port == 9000
     assert settings.app.reload is True
-    assert settings.app.api_mode == "runtime"
     assert settings.dependencies.postgres == "ready"
     assert settings.dependencies.qdrant == "connected"
     assert settings.postgres.database == "docs"

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel, Field, field_validator
 
-from .search import SearchFilters, SearchHit
+from .search import SearchHit
 
 
 class ChatRequest(BaseModel):
@@ -14,7 +12,6 @@ class ChatRequest(BaseModel):
 
     question: str = Field(..., min_length=1, max_length=1000)
     k: int = Field(default=5, ge=1, le=20)
-    filters: Optional[SearchFilters] = None
 
     @field_validator("question")
     @classmethod
@@ -29,4 +26,4 @@ class ChatResponse(BaseModel):
     """Response body for POST /chat."""
 
     answer: str
-    sources: list[SearchHit] = Field(default_factory=list[SearchHit])
+    sources: list[SearchHit] = Field(default_factory=list)

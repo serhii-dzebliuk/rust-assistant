@@ -175,7 +175,7 @@ async def test_upsert_vectors_splits_large_inputs_into_batches():
 
 
 @pytest.mark.asyncio
-async def test_search_calls_query_points_with_filters_and_maps_hits():
+async def test_search_calls_query_points_and_maps_hits():
     client = FakeQdrantClient()
     client.query_points_result = qdrant_models.QueryResponse(
         points=[
@@ -202,7 +202,6 @@ async def test_search_calls_query_points_with_filters_and_maps_hits():
         query_vector=[0.1, 0.2, 0.3],
         limit=5,
         score_threshold=0.7,
-        filters={"crate": "std"},
     )
 
     assert len(client.query_points_calls) == 1
@@ -213,8 +212,7 @@ async def test_search_calls_query_points_with_filters_and_maps_hits():
     assert call["score_threshold"] == 0.7
     assert call["with_payload"] is True
     assert call["with_vectors"] is False
-    assert call["query_filter"].must[0].key == "crate"
-    assert call["query_filter"].must[0].match.value == "std"
+    assert call["query_filter"] is None
     assert hits[0].chunk_id == CHUNK_ID
     assert hits[0].score == 0.92
     assert hits[0].payload == _vector_payload()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Optional, Union
+from typing import Optional, Union
 from uuid import UUID
 
 from qdrant_client import AsyncQdrantClient
@@ -14,7 +14,6 @@ from rust_assistant.application.ports.vector_storage import (
     VectorSearchHit,
 )
 from rust_assistant.infrastructure.adapters.vector_storage.qdrant.mappers import (
-    map_filters_to_qdrant_filter,
     map_vector_payload_from_qdrant_payload,
     map_vector_payload_to_qdrant_payload,
 )
@@ -29,7 +28,7 @@ class QdrantVectorStorage:
         collection_name: str,
         vector_size: int,
         distance: str,
-        upsert_batch_size: int,
+        upsert_batch_size: int = 256,
     ) -> None:
         self._client = client
         self._collection_name = collection_name
@@ -66,13 +65,12 @@ class QdrantVectorStorage:
         query_vector: list[float],
         limit: int,
         score_threshold: Optional[float] = None,
-        filters: Optional[dict[str, Any]] = None,
     ) -> list[VectorSearchHit]:
         """Search for nearest vector matches in Qdrant."""
         result = await self._client.query_points(
             collection_name=self._collection_name,
             query=query_vector,
-            query_filter=map_filters_to_qdrant_filter(filters),
+            query_filter=None,
             limit=limit,
             with_payload=True,
             with_vectors=False,

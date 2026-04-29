@@ -1,5 +1,5 @@
 ﻿from dataclasses import dataclass
-from typing import Any, Optional, Protocol, Sequence
+from typing import Optional, Protocol, Sequence
 from uuid import UUID
 
 
@@ -43,6 +43,5 @@ class VectorStorage(Protocol):
         query_vector: list[float],
         limit: int,
         score_threshold: Optional[float] = None,
-        filters: Optional[dict[str, Any]] = None,
     ) -> list[VectorSearchHit]:
         ...

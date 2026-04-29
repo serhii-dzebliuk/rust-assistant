@@ -37,7 +37,6 @@ services:
       HOST: ${HOST}
       PORT: ${PORT}
       RELOAD: ${RELOAD}
-      API_MODE: ${API_MODE}
       POSTGRES_STATUS: ${POSTGRES_STATUS}
       QDRANT_STATUS: ${QDRANT_STATUS}
       POSTGRES_DB: ${POSTGRES_DB}

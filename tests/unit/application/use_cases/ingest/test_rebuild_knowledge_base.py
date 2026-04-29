@@ -112,7 +112,7 @@ class FakeVectorStorage:
         self.events.append("qdrant.upsert_vectors")
         self.points = list(points)
 
-    async def search(self, query_vector, limit, score_threshold=None, filters=None):
+    async def search(self, query_vector, limit, score_threshold=None):
         return []
 
 

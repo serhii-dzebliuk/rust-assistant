@@ -4,7 +4,6 @@ import pytest
 
 from rust_assistant.application.ports.vector_storage import VectorPayload
 from rust_assistant.infrastructure.adapters.vector_storage.qdrant.mappers import (
-    map_filters_to_qdrant_filter,
     map_vector_payload_from_qdrant_payload,
     map_vector_payload_to_qdrant_payload,
 )
@@ -74,41 +73,3 @@ def test_map_vector_payload_from_qdrant_payload_restores_vector_payload():
 def test_map_vector_payload_from_qdrant_payload_requires_document_id():
     with pytest.raises(ValueError, match="document_id"):
         map_vector_payload_from_qdrant_payload({"crate": "std"})
-
-
-def test_map_filters_to_qdrant_filter_maps_supported_equality_conditions():
-    qdrant_filter = map_filters_to_qdrant_filter(
-        {
-            "document_id": DOCUMENT_ID,
-            "crate": "std",
-            "source_path": "std/primitive.unit.html",
-            "text_hash": "abc123",
-            "chunk_index": 3,
-        }
-    )
-
-    assert qdrant_filter is not None
-    assert qdrant_filter.must is not None
-    conditions = {condition.key: condition.match.value for condition in qdrant_filter.must}
-    assert conditions == {
-        "document_id": "1a0b5f1e-b466-5c53-858f-7d6d50c8d8c8",
-        "crate": "std",
-        "source_path": "std/primitive.unit.html",
-        "text_hash": "abc123",
-        "chunk_index": 3,
-    }
-
-
-def test_map_filters_to_qdrant_filter_returns_none_for_empty_filters():
-    assert map_filters_to_qdrant_filter(None) is None
-    assert map_filters_to_qdrant_filter({}) is None
-
-
-def test_map_filters_to_qdrant_filter_rejects_unknown_filter_key():
-    with pytest.raises(ValueError, match="Unsupported Qdrant filter field"):
-        map_filters_to_qdrant_filter({"unknown": "std/primitive.unit.html"})
-
-
-def test_map_filters_to_qdrant_filter_rejects_unsupported_filter_value_shape():
-    with pytest.raises(ValueError, match="Unsupported Qdrant filter value"):
-        map_filters_to_qdrant_filter({"crate": ["std", "core"]})

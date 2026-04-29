@@ -36,7 +36,6 @@ class AppSettings:
     host: str
     port: int
     reload: bool
-    api_mode: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -124,7 +123,6 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         host=_read_str(env, "HOST", default="0.0.0.0"),
         port=_read_int(env, "PORT", default=8000),
         reload=_read_bool(env, "RELOAD", default=False),
-        api_mode=_read_str(env, "API_MODE", default="stub"),
     )
     dependencies = DependencyStatusSettings(
         postgres=_read_str(env, "POSTGRES_STATUS", default="not_configured"),

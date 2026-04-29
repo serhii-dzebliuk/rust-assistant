@@ -2,7 +2,6 @@
 
 import pytest
 
-from rust_assistant.domain.entities.chunks import Chunk
 from rust_assistant.domain.entities.documents import Document
 from rust_assistant.domain.errors import ChunkingError
 from rust_assistant.domain.policies.chunk_deduplication import deduplicate_chunks
