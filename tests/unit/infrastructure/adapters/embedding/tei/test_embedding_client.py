@@ -12,6 +12,22 @@ pytestmark = pytest.mark.unit
 
 
 @pytest.mark.asyncio
+async def test_embed_text_unwraps_single_tei_embedding_response():
+    async def handler(request):
+        payload = json.loads(request.read())
+        assert payload["inputs"] == "async"
+        return httpx.Response(200, json=[[0.1, 0.2, 0.3]])
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        vector = await TeiEmbeddingClient(
+            client=client,
+            base_url="http://tei",
+        ).embed_text("async")
+
+    assert vector == [0.1, 0.2, 0.3]
+
+
+@pytest.mark.asyncio
 async def test_embed_texts_logs_embedding_progress(caplog):
     async def handler(request):
         inputs = json.loads(request.read())["inputs"]
