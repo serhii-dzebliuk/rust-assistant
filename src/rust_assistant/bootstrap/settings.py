@@ -65,6 +65,10 @@ class QdrantSettings:
     """Qdrant connection settings."""
 
     url: Optional[str]
+    collection_name: str
+    vector_size: Optional[int]
+    distance: str
+    upsert_batch_size: int
 
 
 @dataclass(slots=True, frozen=True)
@@ -81,9 +85,13 @@ class EmbeddingSettings:
 
     provider: Optional[str]
     model: Optional[str]
+    base_url: Optional[str]
+    normalize: bool
     pooling: str
     max_batch_tokens: int
+    max_batch_items: int
     max_concurrent_requests: int
+    request_timeout_seconds: float
 
 
 @dataclass(slots=True, frozen=True)
@@ -131,7 +139,13 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         pool_size=_read_int(env, "POSTGRES_POOL_SIZE", default=10, minimum=0),
         max_overflow=_read_int(env, "POSTGRES_MAX_OVERFLOW", default=10, minimum=0),
     )
-    qdrant = QdrantSettings(url=_read_optional_str(env, "QDRANT_URL"))
+    qdrant = QdrantSettings(
+        url=_read_optional_str(env, "QDRANT_URL"),
+        collection_name=_read_str(env, "QDRANT_COLLECTION_NAME", default="rust-docs"),
+        vector_size=_read_optional_int(env, "QDRANT_VECTOR_SIZE", minimum=1),
+        distance=_read_str(env, "QDRANT_DISTANCE", default="cosine"),
+        upsert_batch_size=_read_int(env, "QDRANT_UPSERT_BATCH_SIZE", default=256),
+    )
     llm = LLMSettings(
         provider=_read_optional_str(env, "LLM_PROVIDER"),
         model=_read_optional_str(env, "LLM_MODEL"),
@@ -139,9 +153,17 @@ def build_settings(env: Mapping[str, str]) -> Settings:
     embedding = EmbeddingSettings(
         provider=_read_optional_str(env, "EMBEDDING_PROVIDER"),
         model=_read_optional_str(env, "EMBEDDING_MODEL"),
+        base_url=_read_optional_str(env, "EMBEDDING_BASE_URL"),
+        normalize=_read_bool(env, "EMBEDDING_NORMALIZE", default=True),
         pooling=_read_str(env, "POOLING", default="mean"),
         max_batch_tokens=_read_int(env, "MAX_BATCH_TOKENS", default=4096),
+        max_batch_items=_read_int(env, "EMBEDDING_MAX_BATCH_ITEMS", default=64),
         max_concurrent_requests=_read_int(env, "MAX_CONCURRENT_REQUESTS", default=8),
+        request_timeout_seconds=_read_float(
+            env,
+            "EMBEDDING_REQUEST_TIMEOUT_SECONDS",
+            default=120.0,
+        ),
     )
     ingest = IngestSettings(
         raw_docs_dir=_read_optional_path(env, "RUST_DOCS_RAW_DIR"),
@@ -216,6 +238,49 @@ def _read_int(
 
     if value < minimum:
         raise ValueError(f"Environment variable {name} must be >= {minimum}")
+    return value
+
+
+def _read_optional_int(
+    env: Mapping[str, str],
+    name: str,
+    *,
+    minimum: int = 1,
+) -> Optional[int]:
+    """Read and validate an optional integer value from a mapping."""
+    raw_value = env.get(name)
+    if raw_value is None or not raw_value.strip():
+        return None
+
+    try:
+        value = int(raw_value.strip())
+    except ValueError as exc:
+        raise ValueError(f"Environment variable {name} must be an integer") from exc
+
+    if value < minimum:
+        raise ValueError(f"Environment variable {name} must be >= {minimum}")
+    return value
+
+
+def _read_float(
+    env: Mapping[str, str],
+    name: str,
+    *,
+    default: float,
+    minimum: float = 0.0,
+) -> float:
+    """Read and validate a float value from a mapping."""
+    raw_value = env.get(name)
+    if raw_value is None or not raw_value.strip():
+        value = default
+    else:
+        try:
+            value = float(raw_value.strip())
+        except ValueError as exc:
+            raise ValueError(f"Environment variable {name} must be a number") from exc
+
+    if value <= minimum:
+        raise ValueError(f"Environment variable {name} must be > {minimum:g}")
     return value
 
 

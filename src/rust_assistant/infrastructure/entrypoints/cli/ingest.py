@@ -27,7 +27,12 @@ def _add_ingest_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     parser.add_argument(
         "--limit",
         type=int,
-        help="Maximum number of files to process. Requires --no-persist.",
+        help="Maximum number of files to process. Requires --no-persist unless sample persistence is allowed.",
+    )
+    parser.add_argument(
+        "--allow-sample-persist",
+        action="store_true",
+        help="Allow --limit with persistence, replacing PostgreSQL and Qdrant with a sample.",
     )
     parser.add_argument(
         "--no-persist",
@@ -62,5 +67,6 @@ def ingest_kwargs_from_args(args: argparse.Namespace) -> Mapping[str, object]:
         "crates": args.crate,
         "limit": args.limit,
         "persist": not args.no_persist,
+        "allow_sample_persist": args.allow_sample_persist,
         "verbose": args.verbose,
     }

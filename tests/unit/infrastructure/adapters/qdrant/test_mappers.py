@@ -20,9 +20,12 @@ def test_map_vector_payload_to_qdrant_payload_omits_none_values():
         document_id=DOCUMENT_ID,
         crate="std",
         item_type=None,
+        source_path="std/primitive.unit.html",
         item_path="std::primitive::unit",
+        rust_version="1.91.1",
         section_title=None,
         chunk_index=0,
+        text_hash="abc123",
     )
 
     qdrant_payload = map_vector_payload_to_qdrant_payload(payload)
@@ -30,8 +33,11 @@ def test_map_vector_payload_to_qdrant_payload_omits_none_values():
     assert qdrant_payload == {
         "document_id": "1a0b5f1e-b466-5c53-858f-7d6d50c8d8c8",
         "crate": "std",
+        "source_path": "std/primitive.unit.html",
         "item_path": "std::primitive::unit",
+        "rust_version": "1.91.1",
         "chunk_index": 0,
+        "text_hash": "abc123",
     }
     assert "item_type" not in qdrant_payload
     assert "section_title" not in qdrant_payload
@@ -43,9 +49,12 @@ def test_map_vector_payload_from_qdrant_payload_restores_vector_payload():
             "document_id": str(DOCUMENT_ID),
             "crate": "std",
             "item_type": "primitive",
+            "source_path": "std/primitive.unit.html",
             "item_path": "std::primitive::unit",
+            "rust_version": "1.91.1",
             "section_title": "Primitive Type unit",
             "chunk_index": 2,
+            "text_hash": "abc123",
         }
     )
 
@@ -53,9 +62,12 @@ def test_map_vector_payload_from_qdrant_payload_restores_vector_payload():
         document_id=DOCUMENT_ID,
         crate="std",
         item_type="primitive",
+        source_path="std/primitive.unit.html",
         item_path="std::primitive::unit",
+        rust_version="1.91.1",
         section_title="Primitive Type unit",
         chunk_index=2,
+        text_hash="abc123",
     )
 
 
@@ -69,6 +81,8 @@ def test_map_filters_to_qdrant_filter_maps_supported_equality_conditions():
         {
             "document_id": DOCUMENT_ID,
             "crate": "std",
+            "source_path": "std/primitive.unit.html",
+            "text_hash": "abc123",
             "chunk_index": 3,
         }
     )
@@ -79,6 +93,8 @@ def test_map_filters_to_qdrant_filter_maps_supported_equality_conditions():
     assert conditions == {
         "document_id": "1a0b5f1e-b466-5c53-858f-7d6d50c8d8c8",
         "crate": "std",
+        "source_path": "std/primitive.unit.html",
+        "text_hash": "abc123",
         "chunk_index": 3,
     }
 
@@ -90,7 +106,7 @@ def test_map_filters_to_qdrant_filter_returns_none_for_empty_filters():
 
 def test_map_filters_to_qdrant_filter_rejects_unknown_filter_key():
     with pytest.raises(ValueError, match="Unsupported Qdrant filter field"):
-        map_filters_to_qdrant_filter({"source_path": "std/primitive.unit.html"})
+        map_filters_to_qdrant_filter({"unknown": "std/primitive.unit.html"})
 
 
 def test_map_filters_to_qdrant_filter_rejects_unsupported_filter_value_shape():

@@ -29,11 +29,15 @@ class QdrantVectorStorage:
         collection_name: str,
         vector_size: int,
         distance: str,
+        upsert_batch_size: int,
     ) -> None:
         self._client = client
         self._collection_name = collection_name
         self._vector_size = vector_size
         self._distance = _resolve_distance(distance)
+        if upsert_batch_size < 1:
+            raise ValueError("Qdrant upsert_batch_size must be >= 1")
+        self._upsert_batch_size = upsert_batch_size
 
     async def recreate_collection(self) -> None:
         """Recreate the configured Qdrant collection."""
@@ -50,17 +54,12 @@ class QdrantVectorStorage:
         if not points:
             return
 
-        await self._client.upsert(
-            collection_name=self._collection_name,
-            points=[
-                qdrant_models.PointStruct(
-                    id=point.chunk_id,
-                    vector=point.vector,
-                    payload=map_vector_payload_to_qdrant_payload(point.payload),
-                )
-                for point in points
-            ],
-        )
+        for batch_start in range(0, len(points), self._upsert_batch_size):
+            batch = points[batch_start : batch_start + self._upsert_batch_size]
+            await self._client.upsert(
+                collection_name=self._collection_name,
+                points=[_map_point_to_qdrant(point) for point in batch],
+            )
 
     async def search(
         self,
@@ -98,6 +97,15 @@ def _resolve_distance(distance: str) -> qdrant_models.Distance:
         if candidate.value.lower() == normalized_distance:
             return candidate
     raise ValueError(f"Unsupported Qdrant distance: {distance}")
+
+
+def _map_point_to_qdrant(point: VectorPoint) -> qdrant_models.PointStruct:
+    """Convert an application vector point into a Qdrant point struct."""
+    return qdrant_models.PointStruct(
+        id=point.chunk_id,
+        vector=point.vector,
+        payload=map_vector_payload_to_qdrant_payload(point.payload),
+    )
 
 
 def _point_id_to_uuid(point_id: Union[int, str, UUID]) -> UUID:

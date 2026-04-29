@@ -9,9 +9,12 @@ class VectorPayload:
 
     crate: Optional[str] = None
     item_type: Optional[str] = None
+    source_path: Optional[str] = None
     item_path: Optional[str] = None
+    rust_version: Optional[str] = None
     section_title: Optional[str] = None
     chunk_index: Optional[int] = None
+    text_hash: Optional[str] = None
 
 
 @dataclass(frozen=True)

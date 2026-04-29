@@ -42,14 +42,35 @@ def _storage(client):
     )
 
 
+def _storage_with_batch_size(client, batch_size):
+    return QdrantVectorStorage(
+        client=client,
+        collection_name="rust-docs",
+        vector_size=3,
+        distance="cosine",
+        upsert_batch_size=batch_size,
+    )
+
+
 def _vector_payload():
     return VectorPayload(
         document_id=DOCUMENT_ID,
         crate="std",
         item_type="primitive",
+        source_path="std/primitive.unit.html",
         item_path="std::primitive::unit",
+        rust_version="1.91.1",
         section_title="Primitive Type unit",
         chunk_index=0,
+        text_hash="abc123",
+    )
+
+
+def _vector_point(index):
+    return VectorPoint(
+        chunk_id=UUID(f"00000000-0000-4000-8000-{index:012d}"),
+        vector=[0.1, 0.2, 0.3],
+        payload=_vector_payload(),
     )
 
 
@@ -91,6 +112,11 @@ def test_constructor_rejects_unknown_distance():
         )
 
 
+def test_constructor_rejects_invalid_upsert_batch_size():
+    with pytest.raises(ValueError, match="upsert_batch_size"):
+        _storage_with_batch_size(FakeQdrantClient(), 0)
+
+
 @pytest.mark.asyncio
 async def test_upsert_vectors_sends_point_structs_with_serialized_payload():
     client = FakeQdrantClient()
@@ -113,9 +139,12 @@ async def test_upsert_vectors_sends_point_structs_with_serialized_payload():
         "document_id": "1a0b5f1e-b466-5c53-858f-7d6d50c8d8c8",
         "crate": "std",
         "item_type": "primitive",
+        "source_path": "std/primitive.unit.html",
         "item_path": "std::primitive::unit",
+        "rust_version": "1.91.1",
         "section_title": "Primitive Type unit",
         "chunk_index": 0,
+        "text_hash": "abc123",
     }
 
 
@@ -126,6 +155,23 @@ async def test_upsert_vectors_is_noop_for_empty_points():
     await _storage(client).upsert_vectors([])
 
     assert client.upsert_calls == []
+
+
+@pytest.mark.asyncio
+async def test_upsert_vectors_splits_large_inputs_into_batches():
+    client = FakeQdrantClient()
+
+    await _storage_with_batch_size(client, 2).upsert_vectors(
+        [_vector_point(1), _vector_point(2), _vector_point(3), _vector_point(4), _vector_point(5)]
+    )
+
+    assert len(client.upsert_calls) == 3
+    assert [len(call["points"]) for call in client.upsert_calls] == [2, 2, 1]
+    assert [call["collection_name"] for call in client.upsert_calls] == [
+        "rust-docs",
+        "rust-docs",
+        "rust-docs",
+    ]
 
 
 @pytest.mark.asyncio
@@ -141,9 +187,12 @@ async def test_search_calls_query_points_with_filters_and_maps_hits():
                     "document_id": str(DOCUMENT_ID),
                     "crate": "std",
                     "item_type": "primitive",
+                    "source_path": "std/primitive.unit.html",
                     "item_path": "std::primitive::unit",
+                    "rust_version": "1.91.1",
                     "section_title": "Primitive Type unit",
                     "chunk_index": 0,
+                    "text_hash": "abc123",
                 },
             )
         ]

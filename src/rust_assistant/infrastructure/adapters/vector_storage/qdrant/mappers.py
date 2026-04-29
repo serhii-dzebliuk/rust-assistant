@@ -14,9 +14,12 @@ _PAYLOAD_FIELDS: Final[frozenset[str]] = frozenset(
         "document_id",
         "crate",
         "item_type",
+        "source_path",
         "item_path",
+        "rust_version",
         "section_title",
         "chunk_index",
+        "text_hash",
     }
 )
 
@@ -27,9 +30,12 @@ def map_vector_payload_to_qdrant_payload(payload: VectorPayload) -> dict[str, An
         "document_id": str(payload.document_id),
         "crate": payload.crate,
         "item_type": payload.item_type,
+        "source_path": payload.source_path,
         "item_path": payload.item_path,
+        "rust_version": payload.rust_version,
         "section_title": payload.section_title,
         "chunk_index": payload.chunk_index,
+        "text_hash": payload.text_hash,
     }
     return {key: value for key, value in raw_payload.items() if value is not None}
 
@@ -49,9 +55,12 @@ def map_vector_payload_from_qdrant_payload(payload: dict[str, Any]) -> VectorPay
         document_id=parsed_document_id,
         crate=_optional_str(payload.get("crate"), "crate"),
         item_type=_optional_str(payload.get("item_type"), "item_type"),
+        source_path=_optional_str(payload.get("source_path"), "source_path"),
         item_path=_optional_str(payload.get("item_path"), "item_path"),
+        rust_version=_optional_str(payload.get("rust_version"), "rust_version"),
         section_title=_optional_str(payload.get("section_title"), "section_title"),
         chunk_index=_optional_int(payload.get("chunk_index"), "chunk_index"),
+        text_hash=_optional_str(payload.get("text_hash"), "text_hash"),
     )
 
 
