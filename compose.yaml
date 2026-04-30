@@ -143,8 +143,8 @@ services:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 60s
+      retries: 20
+      start_period: 120s
     volumes:
       - tei_reranker_data:/data
     networks:
