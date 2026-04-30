@@ -14,7 +14,6 @@ def _settings(**overrides):
     env = {
         "RUST_DOCS_RAW_DIR": str(Path.cwd()),
         "DATABASE_URL": "postgresql+asyncpg://postgres:secret@postgres:5432/rust_assistant",
-        "EMBEDDING_PROVIDER": "tei",
         "EMBEDDING_MODEL": "microsoft/harrier-oss-v1-270m",
         "EMBEDDING_BASE_URL": "http://tei:80",
         "QDRANT_URL": "http://qdrant:6333",
@@ -22,13 +21,6 @@ def _settings(**overrides):
     }
     env.update(overrides)
     return build_settings(env)
-
-
-def test_build_embedding_client_requires_tei_provider():
-    settings = _settings(EMBEDDING_PROVIDER="openai")
-
-    with pytest.raises(ingest.IngestConfigurationError, match="EMBEDDING_PROVIDER"):
-        ingest._build_embedding_client(settings=settings, http_client=object())
 
 
 def test_build_embedding_client_requires_base_url():

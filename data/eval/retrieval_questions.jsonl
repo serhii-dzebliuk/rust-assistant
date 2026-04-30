@@ -1,0 +1,10 @@
+{"id":"async_keyword","question":"What is async in Rust?","expected":[{"item_path":"std::keyword::async"},{"source_path":"std/keyword.async.html"},{"title_contains":"async"}]}
+{"id":"await_keyword","question":"How does await work in Rust?","expected":[{"item_path":"std::keyword::await"},{"source_path":"std/keyword.await.html"},{"title_contains":"await"}]}
+{"id":"vec_push","question":"What does Vec push do?","expected":[{"item_path":"std::vec::Vec::push"},{"source_path":"std/vec/struct.Vec.html","text_contains":"push"}]}
+{"id":"option_unwrap","question":"What happens when Option unwrap is called on None?","expected":[{"item_path":"std::option::Option::unwrap"},{"source_path":"std/option/enum.Option.html","text_contains":"unwrap"}]}
+{"id":"result_question_mark","question":"How does the question mark operator work with Result?","expected":[{"source_path":"std/result/index.html"},{"title_contains":"Result"},{"source_path":"book/ch09-02-recoverable-errors-with-result.html"}]}
+{"id":"string_from","question":"How do I create a String from a string literal?","expected":[{"item_path":"std::string::String::from"},{"source_path":"std/string/struct.String.html","text_contains":"from"}]}
+{"id":"hashmap_insert","question":"How do I insert a value into a HashMap?","expected":[{"item_path":"std::collections::HashMap::insert"},{"source_path":"std/collections/struct.HashMap.html","text_contains":"insert"}]}
+{"id":"send_trait","question":"What is the Send trait in Rust?","expected":[{"item_path":"std::marker::Send"},{"source_path":"std/marker/trait.Send.html"},{"title_contains":"Send"}]}
+{"id":"unsafe_keyword","question":"What does unsafe mean in Rust?","expected":[{"item_path":"std::keyword::unsafe"},{"source_path":"std/keyword.unsafe.html"},{"title_contains":"unsafe"}]}
+{"id":"cargo_build","question":"What does cargo build do?","expected":[{"source_path":"cargo/commands/cargo-build.html"},{"title_contains":"cargo build"}]}

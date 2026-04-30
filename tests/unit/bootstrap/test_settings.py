@@ -20,7 +20,6 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.qdrant.vector_size is None
     assert settings.qdrant.distance == "cosine"
     assert settings.qdrant.upsert_batch_size == 256
-    assert settings.embedding.provider is None
     assert settings.embedding.model is None
     assert settings.embedding.base_url is None
     assert settings.embedding.normalize is True
@@ -58,15 +57,14 @@ def test_build_settings_parses_explicit_values():
             "QDRANT_UPSERT_BATCH_SIZE": "128",
             "LLM_PROVIDER": "openai",
             "LLM_MODEL": "gpt-5",
-            "EMBEDDING_PROVIDER": "tei",
             "EMBEDDING_MODEL": "microsoft/harrier-oss-v1-270m",
             "EMBEDDING_BASE_URL": "http://tei:80",
             "EMBEDDING_NORMALIZE": "false",
             "EMBEDDING_MAX_BATCH_ITEMS": "32",
             "EMBEDDING_REQUEST_TIMEOUT_SECONDS": "180.5",
-            "POOLING": "mean",
-            "MAX_BATCH_TOKENS": "8192",
-            "MAX_CONCURRENT_REQUESTS": "12",
+            "EMBEDDING_POOLING": "mean",
+            "EMBEDDING_MAX_BATCH_TOKENS": "8192",
+            "EMBEDDING_MAX_CONCURRENT_REQUESTS": "12",
             "RUST_DOCS_RAW_DIR": "D:\\rust-docs",
             "INGEST_MAX_CHUNK_CHARS": "1200",
             "INGEST_MIN_CHUNK_CHARS": "120",
@@ -93,7 +91,6 @@ def test_build_settings_parses_explicit_values():
     assert settings.qdrant.upsert_batch_size == 128
     assert settings.llm.provider == "openai"
     assert settings.llm.model == "gpt-5"
-    assert settings.embedding.provider == "tei"
     assert settings.embedding.model == "microsoft/harrier-oss-v1-270m"
     assert settings.embedding.base_url == "http://tei:80"
     assert settings.embedding.normalize is False

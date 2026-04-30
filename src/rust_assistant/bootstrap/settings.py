@@ -82,7 +82,6 @@ class LLMSettings:
 class EmbeddingSettings:
     """Embedding model and serving settings."""
 
-    provider: Optional[str]
     model: Optional[str]
     base_url: Optional[str]
     normalize: bool
@@ -149,14 +148,17 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         model=_read_optional_str(env, "LLM_MODEL"),
     )
     embedding = EmbeddingSettings(
-        provider=_read_optional_str(env, "EMBEDDING_PROVIDER"),
         model=_read_optional_str(env, "EMBEDDING_MODEL"),
         base_url=_read_optional_str(env, "EMBEDDING_BASE_URL"),
         normalize=_read_bool(env, "EMBEDDING_NORMALIZE", default=True),
-        pooling=_read_str(env, "POOLING", default="mean"),
-        max_batch_tokens=_read_int(env, "MAX_BATCH_TOKENS", default=4096),
+        pooling=_read_str(env, "EMBEDDING_POOLING", default="mean"),
+        max_batch_tokens=_read_int(env, "EMBEDDING_MAX_BATCH_TOKENS", default=4096),
         max_batch_items=_read_int(env, "EMBEDDING_MAX_BATCH_ITEMS", default=64),
-        max_concurrent_requests=_read_int(env, "MAX_CONCURRENT_REQUESTS", default=8),
+        max_concurrent_requests=_read_int(
+            env,
+            "EMBEDDING_MAX_CONCURRENT_REQUESTS",
+            default=8,
+        ),
         request_timeout_seconds=_read_float(
             env,
             "EMBEDDING_REQUEST_TIMEOUT_SECONDS",

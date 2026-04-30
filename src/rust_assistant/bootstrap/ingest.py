@@ -162,11 +162,6 @@ def _build_embedding_client(
     http_client: httpx.AsyncClient,
 ) -> TeiEmbeddingClient:
     """Build the configured embedding client for persisted ingest."""
-    provider = settings.embedding.provider
-    if provider != "tei":
-        raise IngestConfigurationError(
-            "EMBEDDING_PROVIDER must be configured as 'tei' before persisted ingest"
-        )
     if settings.embedding.base_url is None:
         raise IngestConfigurationError(
             "EMBEDDING_BASE_URL must be configured before persisted ingest can embed chunks"

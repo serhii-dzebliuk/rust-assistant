@@ -93,7 +93,7 @@ Typical groups of settings:
 - application runtime
 - PostgreSQL connection
 - Qdrant connection
-- LLM and embedding provider settings
+- LLM settings and TEI embedding service settings
 - logging
 - public/proxy settings
 
@@ -115,6 +115,20 @@ Tests should live under `tests/` and be organized by type and layer, for example
 
 - `tests/unit/`
 - `tests/integration/`
+
+## Retrieval evaluation
+
+A small golden retrieval set lives in `data/eval/retrieval_questions.jsonl`. Run it
+against a local or deployed API with:
+
+```bash
+python scripts/eval_retrieval.py --base-url http://127.0.0.1:8000 --k 7
+python scripts/eval_retrieval.py --base-url https://rust-assistant.api.mobik.space --k 7
+```
+
+The script reports `hit_rate@k`, `mrr@k`, average latency, and weak cases. A hit means
+that at least one returned result matches an expected source, item path, title fragment,
+or text fragment from the JSONL case.
 
 ## Current focus
 

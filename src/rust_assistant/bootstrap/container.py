@@ -86,11 +86,6 @@ def _build_embedding_client(
     settings: Settings,
     http_client: httpx.AsyncClient,
 ) -> TeiEmbeddingClient:
-    provider = settings.embedding.provider
-    if provider != "tei":
-        raise RuntimeConfigurationError(
-            "EMBEDDING_PROVIDER must be configured as 'tei' before serving search requests"
-        )
     if settings.embedding.base_url is None:
         raise RuntimeConfigurationError(
             "EMBEDDING_BASE_URL must be configured before serving search requests"
