@@ -15,8 +15,6 @@ from rust_assistant.infrastructure.adapters.reranking.tei.mappers import (
     map_reranking_response,
 )
 
-DEFAULT_MAX_BATCH_ITEMS = 32
-
 
 class TeiRerankingClient:
     """Rerank text candidates through Hugging Face Text Embeddings Inference."""
@@ -25,7 +23,7 @@ class TeiRerankingClient:
         self,
         client: httpx.AsyncClient,
         base_url: str,
-        max_batch_items: int = DEFAULT_MAX_BATCH_ITEMS,
+        max_batch_items: int,
     ) -> None:
         self._client = client
         self._base_url = base_url.rstrip("/")
