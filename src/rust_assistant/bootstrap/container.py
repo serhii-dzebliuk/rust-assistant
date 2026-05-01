@@ -114,6 +114,7 @@ def _build_reranking_client(
     return TeiRerankingClient(
         client=http_client,
         base_url=settings.reranker.base_url,
+        max_batch_items=settings.reranker.max_batch_items,
     )
 
 

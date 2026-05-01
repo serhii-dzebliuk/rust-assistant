@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import httpx
 
@@ -15,6 +15,8 @@ from rust_assistant.infrastructure.adapters.reranking.tei.mappers import (
     map_reranking_response,
 )
 
+DEFAULT_MAX_BATCH_ITEMS = 32
+
 
 class TeiRerankingClient:
     """Rerank text candidates through Hugging Face Text Embeddings Inference."""
@@ -23,9 +25,11 @@ class TeiRerankingClient:
         self,
         client: httpx.AsyncClient,
         base_url: str,
+        max_batch_items: int = DEFAULT_MAX_BATCH_ITEMS,
     ) -> None:
         self._client = client
         self._base_url = base_url.rstrip("/")
+        self._max_batch_items = max_batch_items
 
     async def rerank(
         self,
@@ -36,6 +40,19 @@ class TeiRerankingClient:
         if not candidates:
             return []
 
+        results: list[RerankingResult] = []
+        for batch in _iter_batches(candidates, max_batch_items=self._max_batch_items):
+            results.extend(await self._rerank_batch(query=query, candidates=batch))
+
+        return sorted(results, key=lambda result: result.score, reverse=True)
+
+    async def _rerank_batch(
+        self,
+        *,
+        query: str,
+        candidates: Sequence[RerankingCandidate],
+    ) -> list[RerankingResult]:
+        """Rerank one TEI-compatible candidate batch."""
         response = await self._client.post(
             f"{self._base_url}/rerank",
             json=map_reranking_request(query, candidates),
@@ -62,3 +79,13 @@ class TeiRerankingClient:
             request=response.request,
             response=response,
         )
+
+
+def _iter_batches(
+    candidates: Sequence[RerankingCandidate],
+    *,
+    max_batch_items: int,
+) -> Iterator[list[RerankingCandidate]]:
+    """Yield reranking candidate batches capped by TEI item count."""
+    for index in range(0, len(candidates), max_batch_items):
+        yield list(candidates[index : index + max_batch_items])

@@ -99,6 +99,7 @@ class RerankerSettings:
 
     model: Optional[str]
     base_url: Optional[str]
+    max_batch_items: int
 
 
 @dataclass(slots=True, frozen=True)
@@ -177,6 +178,7 @@ def build_settings(env: Mapping[str, str]) -> Settings:
     reranker = RerankerSettings(
         model=_read_optional_str(env, "RERANKER_MODEL"),
         base_url=_read_optional_str(env, "RERANKER_BASE_URL"),
+        max_batch_items=_read_int(env, "RERANKER_MAX_BATCH_ITEMS", default=32),
     )
     ingest = IngestSettings(
         raw_docs_dir=_read_optional_path(env, "RUST_DOCS_RAW_DIR"),

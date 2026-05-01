@@ -52,6 +52,48 @@ async def test_rerank_posts_tei_request_and_maps_response():
 
 
 @pytest.mark.asyncio
+async def test_rerank_batches_candidates_and_sorts_scores_globally():
+    first = _candidate("first")
+    second = _candidate("second")
+    third = _candidate("third")
+    request_payloads = []
+
+    async def handler(request):
+        payload = json.loads(request.read())
+        request_payloads.append(payload)
+        if payload["texts"] == ["first", "second"]:
+            return httpx.Response(
+                200,
+                json=[
+                    {"index": 0, "score": 0.5},
+                    {"index": 1, "score": 0.9},
+                ],
+            )
+        return httpx.Response(200, json=[{"index": 0, "score": 0.7}])
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        results = await TeiRerankingClient(
+            client=client,
+            base_url="http://tei",
+            max_batch_items=2,
+        ).rerank(
+            "async",
+            [first, second, third],
+        )
+
+    assert [payload["texts"] for payload in request_payloads] == [
+        ["first", "second"],
+        ["third"],
+    ]
+    assert [result.chunk_id for result in results] == [
+        second.chunk_id,
+        third.chunk_id,
+        first.chunk_id,
+    ]
+    assert [result.score for result in results] == [0.9, 0.7, 0.5]
+
+
+@pytest.mark.asyncio
 async def test_rerank_returns_without_request_for_empty_candidates():
     async def handler(_request):
         raise AssertionError("No request expected")
