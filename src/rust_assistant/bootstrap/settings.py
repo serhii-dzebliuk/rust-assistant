@@ -24,6 +24,7 @@ class Settings:
     qdrant: QdrantSettings
     llm: LLMSettings
     embedding: EmbeddingSettings
+    reranker: RerankerSettings
     ingest: IngestSettings
     logging: LoggingSettings
     proxy: ProxySettings
@@ -90,6 +91,14 @@ class EmbeddingSettings:
     max_batch_items: int
     max_concurrent_requests: int
     request_timeout_seconds: float
+
+
+@dataclass(slots=True, frozen=True)
+class RerankerSettings:
+    """Reranker model and serving settings."""
+
+    model: Optional[str]
+    base_url: Optional[str]
 
 
 @dataclass(slots=True, frozen=True)
@@ -165,6 +174,10 @@ def build_settings(env: Mapping[str, str]) -> Settings:
             default=120.0,
         ),
     )
+    reranker = RerankerSettings(
+        model=_read_optional_str(env, "RERANKER_MODEL"),
+        base_url=_read_optional_str(env, "RERANKER_BASE_URL"),
+    )
     ingest = IngestSettings(
         raw_docs_dir=_read_optional_path(env, "RUST_DOCS_RAW_DIR"),
         max_chunk_chars=_read_int(env, "INGEST_MAX_CHUNK_CHARS", default=1400),
@@ -184,6 +197,7 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         qdrant=qdrant,
         llm=llm,
         embedding=embedding,
+        reranker=reranker,
         ingest=ingest,
         logging=logging,
         proxy=proxy,

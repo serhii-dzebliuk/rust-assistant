@@ -53,10 +53,11 @@ def main() -> int:
     results = run_eval(
         cases=cases,
         base_url=args.base_url,
-        k=args.k,
+        retrieval_limit=args.retrieval_limit,
+        reranking_limit=args.reranking_limit,
         timeout_seconds=args.timeout,
     )
-    print_report(results, k=args.k)
+    print_report(results, reranking_limit=args.reranking_limit)
     return 0 if _success_rate(results) >= args.min_success_rate else 1
 
 
@@ -83,7 +84,8 @@ def run_eval(
     *,
     cases: list[EvalCase],
     base_url: str,
-    k: int,
+    retrieval_limit: int,
+    reranking_limit: int,
     timeout_seconds: float,
 ) -> list[CaseResult]:
     """Run all retrieval cases against a live /search endpoint."""
@@ -93,7 +95,14 @@ def run_eval(
         for case in cases:
             started = perf_counter()
             try:
-                response = client.post(search_url, json={"query": case.question, "k": k})
+                response = client.post(
+                    search_url,
+                    json={
+                        "query": case.question,
+                        "retrieval_limit": retrieval_limit,
+                        "reranking_limit": reranking_limit,
+                    },
+                )
                 response.raise_for_status()
                 hits = response.json().get("results", [])
                 rank = first_matching_rank(hits, case.expected)
@@ -136,7 +145,7 @@ def first_matching_rank(
     return None
 
 
-def print_report(results: list[CaseResult], *, k: int) -> None:
+def print_report(results: list[CaseResult], *, reranking_limit: int) -> None:
     """Print aggregate retrieval metrics and weak cases."""
     total = len(results)
     matched = sum(1 for result in results if result.matched)
@@ -144,8 +153,8 @@ def print_report(results: list[CaseResult], *, k: int) -> None:
     average_latency = sum(result.elapsed_ms for result in results) / total
 
     print(f"cases: {total}")
-    print(f"hit_rate@{k}: {matched / total:.3f} ({matched}/{total})")
-    print(f"mrr@{k}: {mrr:.3f}")
+    print(f"hit_rate@{reranking_limit}: {matched / total:.3f} ({matched}/{total})")
+    print(f"mrr@{reranking_limit}: {mrr:.3f}")
     print(f"avg_latency_ms: {average_latency:.1f}")
 
     weak_results = [result for result in results if not result.matched or result.rank != 1]
@@ -198,7 +207,8 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
-    parser.add_argument("--k", type=int, default=7)
+    parser.add_argument("--retrieval-limit", type=int, default=50)
+    parser.add_argument("--reranking-limit", type=int, default=10)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--min-success-rate", type=float, default=0.8)
     return parser.parse_args()

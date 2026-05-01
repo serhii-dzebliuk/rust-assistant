@@ -122,13 +122,13 @@ A small golden retrieval set lives in `data/eval/retrieval_questions.jsonl`. Run
 against a local or deployed API with:
 
 ```bash
-python scripts/eval_retrieval.py --base-url http://127.0.0.1:8000 --k 7
-python scripts/eval_retrieval.py --base-url https://rust-assistant.api.mobik.space --k 7
+python scripts/eval_retrieval.py --base-url http://127.0.0.1:8000 --retrieval-limit 50 --reranking-limit 10
+python scripts/eval_retrieval.py --base-url https://rust-assistant.api.mobik.space --retrieval-limit 50 --reranking-limit 10
 ```
 
-The script reports `hit_rate@k`, `mrr@k`, average latency, and weak cases. A hit means
-that at least one returned result matches an expected source, item path, title fragment,
-or text fragment from the JSONL case.
+The script reports `hit_rate@reranking_limit`, `mrr@reranking_limit`, average latency,
+and weak cases. A hit means that at least one returned result matches an expected source,
+item path, title fragment, or text fragment from the JSONL case.
 
 ## Current focus
 

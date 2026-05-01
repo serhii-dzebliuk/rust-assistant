@@ -28,6 +28,8 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.embedding.max_batch_items == 64
     assert settings.embedding.max_concurrent_requests == 8
     assert settings.embedding.request_timeout_seconds == 120.0
+    assert settings.reranker.model is None
+    assert settings.reranker.base_url is None
     assert settings.ingest.raw_docs_dir is None
     assert settings.ingest.max_chunk_chars == 1400
     assert settings.ingest.min_chunk_chars == 180
@@ -65,6 +67,8 @@ def test_build_settings_parses_explicit_values():
             "EMBEDDING_POOLING": "mean",
             "EMBEDDING_MAX_BATCH_TOKENS": "8192",
             "EMBEDDING_MAX_CONCURRENT_REQUESTS": "12",
+            "RERANKER_MODEL": "BAAI/bge-reranker-v2-m3",
+            "RERANKER_BASE_URL": "http://tei-reranker:80",
             "RUST_DOCS_RAW_DIR": "D:\\rust-docs",
             "INGEST_MAX_CHUNK_CHARS": "1200",
             "INGEST_MIN_CHUNK_CHARS": "120",
@@ -99,6 +103,8 @@ def test_build_settings_parses_explicit_values():
     assert settings.embedding.max_batch_items == 32
     assert settings.embedding.max_concurrent_requests == 12
     assert settings.embedding.request_timeout_seconds == 180.5
+    assert settings.reranker.model == "BAAI/bge-reranker-v2-m3"
+    assert settings.reranker.base_url == "http://tei-reranker:80"
     assert str(settings.ingest.raw_docs_dir) == "D:\\rust-docs"
     assert settings.ingest.max_chunk_chars == 1200
     assert settings.ingest.min_chunk_chars == 120

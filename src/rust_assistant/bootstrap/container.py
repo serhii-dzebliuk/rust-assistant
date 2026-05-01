@@ -22,6 +22,9 @@ from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.uow import S
 from rust_assistant.infrastructure.adapters.embedding.tei.tei_embedding_client import (
     TeiEmbeddingClient,
 )
+from rust_assistant.infrastructure.adapters.reranking.tei.tei_reranking_client import (
+    TeiRerankingClient,
+)
 from rust_assistant.infrastructure.adapters.vector_storage.qdrant.qdrant_vector_storage import (
     QdrantVectorStorage,
 )
@@ -99,6 +102,21 @@ def _build_embedding_client(
     )
 
 
+def _build_reranking_client(
+    *,
+    settings: Settings,
+    http_client: httpx.AsyncClient,
+) -> TeiRerankingClient:
+    if settings.reranker.base_url is None:
+        raise RuntimeConfigurationError(
+            "RERANKER_BASE_URL must be configured before serving search requests"
+        )
+    return TeiRerankingClient(
+        client=http_client,
+        base_url=settings.reranker.base_url,
+    )
+
+
 def _build_qdrant_client(settings: Settings) -> AsyncQdrantClient:
     if settings.qdrant.url is None:
         raise RuntimeConfigurationError(
@@ -156,6 +174,10 @@ def build_container(
             vector_storage=_build_vector_storage(
                 settings=runtime_settings,
                 qdrant_client=qdrant_client,
+            ),
+            reranking_client=_build_reranking_client(
+                settings=runtime_settings,
+                http_client=http_client,
             ),
             uow=SqlAlchemyUnitOfWork(session_factory),
         ),

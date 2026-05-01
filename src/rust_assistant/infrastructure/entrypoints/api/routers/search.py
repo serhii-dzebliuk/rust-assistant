@@ -29,7 +29,8 @@ async def search(request: Request, payload: SearchRequest) -> SearchResponse:
     result = await use_case.execute(
         SearchCommand(
             query=payload.query,
-            limit=payload.k,
+            retrieval_limit=payload.retrieval_limit,
+            reranking_limit=payload.reranking_limit,
         )
     )
     return map_search_result_to_response(result)

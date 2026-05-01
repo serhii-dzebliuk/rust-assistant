@@ -58,7 +58,8 @@ def test_search_maps_request_to_use_case_and_returns_enriched_hits(
         "/search",
         json={
             "query": " async ",
-            "k": 3,
+            "retrieval_limit": 30,
+            "reranking_limit": 3,
         },
     )
 
@@ -85,15 +86,20 @@ def test_search_maps_request_to_use_case_and_returns_enriched_hits(
     }
     command = search_use_case.commands[0]
     assert command.query == "async"
-    assert command.limit == 3
+    assert command.retrieval_limit == 30
+    assert command.reranking_limit == 3
 
 
 @pytest.mark.parametrize(
     "payload",
     [
         {"query": "   "},
-        {"query": "async", "k": 0},
-        {"query": "async", "k": 51},
+        {"query": "async", "retrieval_limit": 0},
+        {"query": "async", "retrieval_limit": 101},
+        {"query": "async", "reranking_limit": 0},
+        {"query": "async", "reranking_limit": 101},
+        {"query": "async", "retrieval_limit": 5, "reranking_limit": 6},
+        {"query": "async", "k": 5},
     ],
 )
 def test_search_rejects_invalid_requests(client: TestClient, payload):

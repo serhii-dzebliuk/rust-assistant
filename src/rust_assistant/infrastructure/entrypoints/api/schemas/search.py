@@ -5,14 +5,17 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class SearchRequest(BaseModel):
     """Request body for POST /search."""
 
+    model_config = ConfigDict(extra="forbid")
+
     query: str = Field(..., min_length=1, max_length=1000)
-    k: int = Field(default=5, ge=1, le=50)
+    retrieval_limit: int = Field(default=50, ge=1, le=100)
+    reranking_limit: int = Field(default=10, ge=1, le=100)
 
     @field_validator("query")
     @classmethod
@@ -21,6 +24,13 @@ class SearchRequest(BaseModel):
         if not value or not value.strip():
             raise ValueError("Query cannot be empty")
         return value.strip()
+
+    @model_validator(mode="after")
+    def validate_limit_order(self) -> "SearchRequest":
+        """Reject final reranking limits above the retrieval pool size."""
+        if self.reranking_limit > self.retrieval_limit:
+            raise ValueError("reranking_limit must be <= retrieval_limit")
+        return self
 
 
 class SearchHit(BaseModel):

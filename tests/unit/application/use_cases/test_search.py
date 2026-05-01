@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 
 from rust_assistant.application.dto.chunk_context import ChunkContext
+from rust_assistant.application.ports.reranking_client import RerankingResult
 from rust_assistant.application.ports.vector_storage import VectorPayload, VectorSearchHit
 from rust_assistant.application.use_cases.search import SearchCommand, SearchUseCase
 from rust_assistant.domain.enums import Crate, ItemType
@@ -41,6 +42,29 @@ class FakeVectorStorage:
         if self.fail:
             raise RuntimeError("vector search failed")
         return self.hits
+
+
+class FakeRerankingClient:
+    def __init__(self, *, results=None, fail: bool = False):
+        self.results = results
+        self.fail = fail
+        self.calls = []
+
+    async def rerank(self, query, candidates):
+        self.calls.append(
+            {
+                "query": query,
+                "candidates": list(candidates),
+            }
+        )
+        if self.fail:
+            raise RuntimeError("reranking failed")
+        if self.results is not None:
+            return self.results
+        return [
+            RerankingResult(chunk_id=candidate.chunk_id, score=1.0 - index / 10)
+            for index, candidate in enumerate(candidates)
+        ]
 
 
 class FakeChunks:
@@ -94,16 +118,23 @@ def _hit(chunk_id, *, score):
     )
 
 
-def _use_case(*, embedding_client=None, vector_storage=None, chunks=None):
+def _use_case(
+    *,
+    embedding_client=None,
+    vector_storage=None,
+    reranking_client=None,
+    chunks=None,
+):
     return SearchUseCase(
         embedding_client=embedding_client or FakeEmbeddingClient(),
         vector_storage=vector_storage or FakeVectorStorage(),
+        reranking_client=reranking_client or FakeRerankingClient(),
         uow=FakeUnitOfWork(chunks or FakeChunks()),
     )
 
 
 @pytest.mark.asyncio
-async def test_search_returns_hydrated_hits_in_vector_order():
+async def test_search_returns_hydrated_hits_in_reranker_order():
     first = _context(text="First chunk explains async functions.")
     second = _context(text="Second chunk explains await points.")
     vector_storage = FakeVectorStorage(
@@ -113,23 +144,35 @@ async def test_search_returns_hydrated_hits_in_vector_order():
         ]
     )
     chunks = FakeChunks(contexts=[second, first])
-
-    result = await _use_case(vector_storage=vector_storage, chunks=chunks).execute(
-        SearchCommand(query=" async ", limit=2)
+    reranking_client = FakeRerankingClient(
+        results=[
+            RerankingResult(chunk_id=first.chunk_id, score=0.98),
+            RerankingResult(chunk_id=second.chunk_id, score=0.84),
+        ]
     )
 
+    result = await _use_case(
+        vector_storage=vector_storage,
+        reranking_client=reranking_client,
+        chunks=chunks,
+    ).execute(SearchCommand(query=" async ", retrieval_limit=2, reranking_limit=2))
+
     assert result.query == "async"
-    assert [hit.chunk_id for hit in result.hits] == [second.chunk_id, first.chunk_id]
-    assert result.hits[0].document_id == second.document_id
+    assert [hit.chunk_id for hit in result.hits] == [first.chunk_id, second.chunk_id]
+    assert result.hits[0].document_id == first.document_id
     assert result.hits[0].title == "std::keyword::async"
     assert result.hits[0].url == "https://doc.rust-lang.org/std/keyword.async.html"
     assert result.hits[0].section == "Keyword async"
     assert result.hits[0].crate == "std"
     assert result.hits[0].item_type == "keyword"
     assert result.hits[0].rust_version == "1.91.1"
-    assert result.hits[0].score == 0.91
-    assert result.hits[0].text == "Second chunk explains await points."
+    assert result.hits[0].score == 0.98
+    assert result.hits[0].text == "First chunk explains async functions."
     assert chunks.ids == [[second.chunk_id, first.chunk_id]]
+    assert [candidate.chunk_id for candidate in reranking_client.calls[0]["candidates"]] == [
+        second.chunk_id,
+        first.chunk_id,
+    ]
 
 
 @pytest.mark.asyncio
@@ -137,7 +180,7 @@ async def test_search_calls_vector_storage_with_query_vector_and_limit():
     vector_storage = FakeVectorStorage()
 
     await _use_case(vector_storage=vector_storage).execute(
-        SearchCommand(query="async", limit=5)
+        SearchCommand(query="async", retrieval_limit=5, reranking_limit=2)
     )
 
     assert vector_storage.calls[0] == {
@@ -148,7 +191,7 @@ async def test_search_calls_vector_storage_with_query_vector_and_limit():
 
 
 @pytest.mark.asyncio
-async def test_search_skips_missing_chunk_contexts_without_reordering_found_hits():
+async def test_search_skips_missing_chunk_contexts_before_reranking():
     first = _context()
     missing = ChunkId(uuid4())
     second = replace(_context(), chunk_id=ChunkId(uuid4()))
@@ -160,34 +203,86 @@ async def test_search_skips_missing_chunk_contexts_without_reordering_found_hits
         ]
     )
     chunks = FakeChunks(contexts=[second, first])
+    reranking_client = FakeRerankingClient()
 
-    result = await _use_case(vector_storage=vector_storage, chunks=chunks).execute(
-        SearchCommand(query="async", limit=3)
-    )
+    result = await _use_case(
+        vector_storage=vector_storage,
+        reranking_client=reranking_client,
+        chunks=chunks,
+    ).execute(SearchCommand(query="async", retrieval_limit=3, reranking_limit=3))
 
     assert [hit.chunk_id for hit in result.hits] == [first.chunk_id, second.chunk_id]
+    assert [candidate.chunk_id for candidate in reranking_client.calls[0]["candidates"]] == [
+        first.chunk_id,
+        second.chunk_id,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_truncates_results_to_reranking_limit():
+    first = _context()
+    second = replace(_context(), chunk_id=ChunkId(uuid4()))
+    vector_storage = FakeVectorStorage(
+        hits=[
+            _hit(first.chunk_id, score=0.95),
+            _hit(second.chunk_id, score=0.93),
+        ]
+    )
+    reranking_client = FakeRerankingClient(
+        results=[
+            RerankingResult(chunk_id=second.chunk_id, score=0.99),
+            RerankingResult(chunk_id=first.chunk_id, score=0.88),
+        ]
+    )
+
+    result = await _use_case(
+        vector_storage=vector_storage,
+        reranking_client=reranking_client,
+        chunks=FakeChunks(contexts=[first, second]),
+    ).execute(SearchCommand(query="async", retrieval_limit=2, reranking_limit=1))
+
+    assert [hit.chunk_id for hit in result.hits] == [second.chunk_id]
 
 
 @pytest.mark.asyncio
 async def test_search_returns_empty_result_without_loading_contexts():
     chunks = FakeChunks()
+    reranking_client = FakeRerankingClient()
 
-    result = await _use_case(chunks=chunks).execute(SearchCommand(query="async", limit=5))
+    result = await _use_case(reranking_client=reranking_client, chunks=chunks).execute(
+        SearchCommand(query="async", retrieval_limit=5, reranking_limit=2)
+    )
 
     assert result.hits == []
     assert chunks.ids == []
+    assert reranking_client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_search_returns_empty_result_without_reranking_when_no_contexts_found():
+    context = _context()
+    reranking_client = FakeRerankingClient()
+
+    result = await _use_case(
+        vector_storage=FakeVectorStorage(hits=[_hit(context.chunk_id, score=0.8)]),
+        reranking_client=reranking_client,
+        chunks=FakeChunks(contexts=[]),
+    ).execute(SearchCommand(query="async", retrieval_limit=5, reranking_limit=2))
+
+    assert result.hits == []
+    assert reranking_client.calls == []
 
 
 @pytest.mark.asyncio
 async def test_search_propagates_dependency_failures():
     with pytest.raises(RuntimeError, match="embedding failed"):
         await _use_case(embedding_client=FakeEmbeddingClient(fail=True)).execute(
-            SearchCommand(query="async", limit=5)
+            SearchCommand(query="async", retrieval_limit=5, reranking_limit=2)
         )
 
     with pytest.raises(RuntimeError, match="vector search failed"):
         await _use_case(vector_storage=FakeVectorStorage(fail=True)).execute(
-            SearchCommand(query="async", limit=5)
+            SearchCommand(query="async", retrieval_limit=5, reranking_limit=2)
         )
 
     context = _context()
@@ -195,4 +290,11 @@ async def test_search_propagates_dependency_failures():
         await _use_case(
             vector_storage=FakeVectorStorage(hits=[_hit(context.chunk_id, score=0.8)]),
             chunks=FakeChunks(fail=True),
-        ).execute(SearchCommand(query="async", limit=5))
+        ).execute(SearchCommand(query="async", retrieval_limit=5, reranking_limit=2))
+
+    with pytest.raises(RuntimeError, match="reranking failed"):
+        await _use_case(
+            vector_storage=FakeVectorStorage(hits=[_hit(context.chunk_id, score=0.8)]),
+            reranking_client=FakeRerankingClient(fail=True),
+            chunks=FakeChunks(contexts=[context]),
+        ).execute(SearchCommand(query="async", retrieval_limit=5, reranking_limit=2))
