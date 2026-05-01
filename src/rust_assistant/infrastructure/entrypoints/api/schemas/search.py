@@ -16,6 +16,7 @@ class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
     retrieval_limit: int = Field(default=50, ge=1, le=100)
     reranking_limit: int = Field(default=10, ge=1, le=100)
+    use_reranking: bool = True
 
     @field_validator("query")
     @classmethod

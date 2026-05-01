@@ -31,6 +31,7 @@ async def search(request: Request, payload: SearchRequest) -> SearchResponse:
             query=payload.query,
             retrieval_limit=payload.retrieval_limit,
             reranking_limit=payload.reranking_limit,
+            use_reranking=payload.use_reranking,
         )
     )
     return map_search_result_to_response(result)

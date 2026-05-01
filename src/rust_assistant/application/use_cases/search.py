@@ -14,7 +14,7 @@ from rust_assistant.application.ports.reranking_client import (
     RerankingResult,
 )
 from rust_assistant.application.ports.uow import UnitOfWork
-from rust_assistant.application.ports.vector_storage import VectorStorage
+from rust_assistant.application.ports.vector_storage import VectorSearchHit, VectorStorage
 from rust_assistant.domain.value_objects.identifiers import ChunkId
 
 
@@ -25,6 +25,7 @@ class SearchCommand:
     query: str
     retrieval_limit: int = 50
     reranking_limit: int = 10
+    use_reranking: bool = True
 
 
 @dataclass(slots=True, frozen=True)
@@ -85,6 +86,16 @@ class SearchUseCase:
             contexts = await uow.chunks.get_contexts(chunk_ids)
 
         contexts_by_id = {context.chunk_id: context for context in contexts}
+        if not command.use_reranking:
+            return SearchResult(
+                query=query,
+                hits=[
+                    _build_vector_result_hit(hit, contexts_by_id[ChunkId(hit.chunk_id)])
+                    for hit in vector_hits[: command.reranking_limit]
+                    if ChunkId(hit.chunk_id) in contexts_by_id
+                ],
+            )
+
         reranking_candidates = [
             RerankingCandidate(
                 chunk_id=ChunkId(hit.chunk_id),
@@ -110,6 +121,24 @@ class SearchUseCase:
                 if result.chunk_id in contexts_by_id
             ],
         )
+
+
+def _build_vector_result_hit(hit: VectorSearchHit, context: ChunkContext) -> SearchResultHit:
+    """Combine vector ranking data with canonical chunk context."""
+    return SearchResultHit(
+        chunk_id=context.chunk_id,
+        document_id=context.document_id,
+        title=context.title,
+        source_path=context.source_path,
+        url=context.url,
+        section=context.section_title,
+        item_path=context.item_path,
+        crate=context.crate.value,
+        item_type=context.item_type.value if context.item_type is not None else None,
+        rust_version=context.rust_version,
+        score=hit.score,
+        text=context.text,
+    )
 
 
 def _build_result_hit(result: RerankingResult, context: ChunkContext) -> SearchResultHit:

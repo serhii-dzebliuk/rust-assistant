@@ -60,6 +60,7 @@ def test_search_maps_request_to_use_case_and_returns_enriched_hits(
             "query": " async ",
             "retrieval_limit": 30,
             "reranking_limit": 3,
+            "use_reranking": False,
         },
     )
 
@@ -88,6 +89,7 @@ def test_search_maps_request_to_use_case_and_returns_enriched_hits(
     assert command.query == "async"
     assert command.retrieval_limit == 30
     assert command.reranking_limit == 3
+    assert command.use_reranking is False
 
 
 @pytest.mark.parametrize(

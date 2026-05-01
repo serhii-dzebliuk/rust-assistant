@@ -191,6 +191,36 @@ async def test_search_calls_vector_storage_with_query_vector_and_limit():
 
 
 @pytest.mark.asyncio
+async def test_search_can_return_vector_only_baseline_without_reranking():
+    first = _context(text="First chunk.")
+    second = replace(_context(), chunk_id=ChunkId(uuid4()), text="Second chunk.")
+    vector_storage = FakeVectorStorage(
+        hits=[
+            _hit(first.chunk_id, score=0.95),
+            _hit(second.chunk_id, score=0.93),
+        ]
+    )
+    reranking_client = FakeRerankingClient()
+
+    result = await _use_case(
+        vector_storage=vector_storage,
+        reranking_client=reranking_client,
+        chunks=FakeChunks(contexts=[first, second]),
+    ).execute(
+        SearchCommand(
+            query="async",
+            retrieval_limit=2,
+            reranking_limit=1,
+            use_reranking=False,
+        )
+    )
+
+    assert [hit.chunk_id for hit in result.hits] == [first.chunk_id]
+    assert result.hits[0].score == 0.95
+    assert reranking_client.calls == []
+
+
+@pytest.mark.asyncio
 async def test_search_skips_missing_chunk_contexts_before_reranking():
     first = _context()
     missing = ChunkId(uuid4())
