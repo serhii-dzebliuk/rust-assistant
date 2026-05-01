@@ -51,6 +51,17 @@ def test_first_matching_rank_returns_none_when_no_hit_matches():
     assert module.first_matching_rank([{"title": "std::future"}], [{"title": "Vec"}]) is None
 
 
+def test_parse_args_defaults_to_production_retrieval_shape(monkeypatch):
+    module = _load_module()
+
+    monkeypatch.setattr(sys, "argv", ["eval_retrieval.py"])
+
+    args = module._parse_args()
+
+    assert args.retrieval_limit == 20
+    assert args.reranking_limit == 10
+
+
 def test_run_eval_sends_use_reranking_flag(monkeypatch):
     module = _load_module()
     calls = []

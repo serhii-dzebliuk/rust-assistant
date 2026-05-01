@@ -26,4 +26,4 @@ class ChatResponse(BaseModel):
     """Response body for POST /chat."""
 
     answer: str
-    sources: list[SearchHit] = Field(default_factory=list)
+    sources: list[SearchHit] = Field(default_factory=list[SearchHit])

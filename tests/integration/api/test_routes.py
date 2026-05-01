@@ -92,6 +92,19 @@ def test_search_maps_request_to_use_case_and_returns_enriched_hits(
     assert command.use_reranking is False
 
 
+def test_search_uses_default_retrieval_and_reranking_limits(
+    client: TestClient,
+    search_use_case: FakeSearchUseCase,
+):
+    response = client.post("/search", json={"query": "async"})
+
+    assert response.status_code == 200
+    command = search_use_case.commands[0]
+    assert command.retrieval_limit == 20
+    assert command.reranking_limit == 10
+    assert command.use_reranking is True
+
+
 @pytest.mark.parametrize(
     "payload",
     [

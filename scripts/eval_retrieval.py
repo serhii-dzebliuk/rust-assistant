@@ -364,7 +364,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--mode", choices=EVAL_MODES, default="rerank")
-    parser.add_argument("--retrieval-limit", type=int, default=50)
+    parser.add_argument("--retrieval-limit", type=int, default=20)
     parser.add_argument("--reranking-limit", type=int, default=10)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--min-success-rate", type=float, default=0.8)

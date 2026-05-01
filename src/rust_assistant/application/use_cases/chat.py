@@ -1,4 +1,4 @@
-"""Search use-case orchestration."""
+"""Chat use-case orchestration."""
 
 from __future__ import annotations
 
@@ -14,26 +14,26 @@ from rust_assistant.application.services.retrieval.pipeline import RetrievalPipe
 
 
 @dataclass(slots=True, frozen=True)
-class SearchCommand:
-    """Input command for the search use case."""
+class ChatCommand:
+    """Input command for the chat use case."""
 
-    query: str
+    question: str
     retrieval_limit: int = 20
-    reranking_limit: int = 10
+    reranking_limit: int = 5
     use_reranking: bool = True
 
 
 @dataclass(slots=True, frozen=True)
-class SearchResult:
-    """Search use-case result."""
+class ChatResult:
+    """Chat use-case result."""
 
-    query: str
-    hits: list[SearchResultHit]
+    answer: str
+    sources: list[ChatResultSource]
 
 
 @dataclass(slots=True, frozen=True)
-class SearchResultHit:
-    """One hydrated search hit produced by the application layer."""
+class ChatResultSource:
+    """One retrieved source used by the chat use case."""
 
     chunk_id: UUID
     document_id: UUID
@@ -49,8 +49,8 @@ class SearchResultHit:
     text: str
 
 
-class SearchUseCase:
-    """Retrieve and hydrate documentation chunks for a user query."""
+class ChatUseCase:
+    """Retrieve grounded sources for a future generated chat answer."""
 
     def __init__(
         self,
@@ -59,26 +59,26 @@ class SearchUseCase:
     ) -> None:
         self._retrieval_pipeline = retrieval_pipeline
 
-    async def execute(self, command: SearchCommand) -> SearchResult:
-        """Run vector retrieval and load canonical chunk contexts."""
-        query = command.query.strip()
+    async def execute(self, command: ChatCommand) -> ChatResult:
+        """Retrieve sources for a chat question."""
+        question = command.question.strip()
         chunks = await self._retrieval_pipeline.retrieve(
             RetrievalRequest(
-                query=query,
+                query=question,
                 retrieval_limit=command.retrieval_limit,
                 reranking_limit=command.reranking_limit,
                 use_reranking=command.use_reranking,
             )
         )
-        return SearchResult(
-            query=query,
-            hits=[_map_retrieved_chunk(chunk) for chunk in chunks],
+        # TODO: Generate a grounded answer through an LLM after retrieval is stable.
+        return ChatResult(
+            answer="",
+            sources=[_map_source(chunk) for chunk in chunks],
         )
 
 
-def _map_retrieved_chunk(chunk: RetrievedChunk) -> SearchResultHit:
-    """Map an internal retrieval model into the search result contract."""
-    return SearchResultHit(
+def _map_source(chunk: RetrievedChunk) -> ChatResultSource:
+    return ChatResultSource(
         chunk_id=chunk.chunk_id,
         document_id=chunk.document_id,
         title=chunk.title,

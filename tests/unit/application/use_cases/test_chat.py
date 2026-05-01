@@ -3,7 +3,7 @@ from uuid import UUID
 import pytest
 
 from rust_assistant.application.services.retrieval.models import RetrievedChunk
-from rust_assistant.application.use_cases.search import SearchCommand, SearchUseCase
+from rust_assistant.application.use_cases.chat import ChatCommand, ChatUseCase
 
 pytestmark = pytest.mark.unit
 
@@ -36,12 +36,12 @@ def _chunk() -> RetrievedChunk:
 
 
 @pytest.mark.asyncio
-async def test_search_maps_command_to_retrieval_request():
+async def test_chat_maps_command_to_retrieval_request():
     retrieval_pipeline = FakeRetrievalPipeline()
 
-    await SearchUseCase(retrieval_pipeline=retrieval_pipeline).execute(
-        SearchCommand(
-            query=" async ",
+    await ChatUseCase(retrieval_pipeline=retrieval_pipeline).execute(
+        ChatCommand(
+            question=" What is async? ",
             retrieval_limit=30,
             reranking_limit=3,
             use_reranking=False,
@@ -49,29 +49,29 @@ async def test_search_maps_command_to_retrieval_request():
     )
 
     request = retrieval_pipeline.requests[0]
-    assert request.query == "async"
+    assert request.query == "What is async?"
     assert request.retrieval_limit == 30
     assert request.reranking_limit == 3
     assert request.use_reranking is False
 
 
 @pytest.mark.asyncio
-async def test_search_maps_retrieved_chunks_to_result_hits():
-    result = await SearchUseCase(
+async def test_chat_returns_retrieved_sources_without_llm_answer():
+    result = await ChatUseCase(
         retrieval_pipeline=FakeRetrievalPipeline(chunks=[_chunk()])
-    ).execute(SearchCommand(query=" async "))
+    ).execute(ChatCommand(question="What is async?"))
 
-    assert result.query == "async"
-    assert len(result.hits) == 1
-    assert result.hits[0].chunk_id == UUID("11111111-1111-4111-8111-111111111111")
-    assert result.hits[0].document_id == UUID("22222222-2222-4222-8222-222222222222")
-    assert result.hits[0].title == "std::keyword::async"
-    assert result.hits[0].source_path == "std/keyword.async.html"
-    assert result.hits[0].url == "https://doc.rust-lang.org/std/keyword.async.html"
-    assert result.hits[0].section == "Keyword async"
-    assert result.hits[0].item_path == "std::keyword::async"
-    assert result.hits[0].crate == "std"
-    assert result.hits[0].item_type == "keyword"
-    assert result.hits[0].rust_version == "1.91.1"
-    assert result.hits[0].score == 0.98
-    assert result.hits[0].text == "Async returns a Future."
+    assert result.answer == ""
+    assert len(result.sources) == 1
+    assert result.sources[0].chunk_id == UUID("11111111-1111-4111-8111-111111111111")
+    assert result.sources[0].document_id == UUID("22222222-2222-4222-8222-222222222222")
+    assert result.sources[0].title == "std::keyword::async"
+    assert result.sources[0].source_path == "std/keyword.async.html"
+    assert result.sources[0].url == "https://doc.rust-lang.org/std/keyword.async.html"
+    assert result.sources[0].section == "Keyword async"
+    assert result.sources[0].item_path == "std::keyword::async"
+    assert result.sources[0].crate == "std"
+    assert result.sources[0].item_type == "keyword"
+    assert result.sources[0].rust_version == "1.91.1"
+    assert result.sources[0].score == 0.98
+    assert result.sources[0].text == "Async returns a Future."

@@ -8,3 +8,31 @@
 {"id":"send_trait","question":"What is the Send trait in Rust?","expected":[{"item_path":"std::marker::Send"},{"source_path":"std/marker/trait.Send.html"},{"title_contains":"Send"}]}
 {"id":"unsafe_keyword","question":"What does unsafe mean in Rust?","expected":[{"item_path":"std::keyword::unsafe"},{"source_path":"std/keyword.unsafe.html"},{"title_contains":"unsafe"}]}
 {"id":"cargo_build","question":"What does cargo build do?","expected":[{"source_path":"cargo/commands/cargo-build.html"},{"title_contains":"cargo build"}]}
+{"id":"vec_pop","question":"How do I remove the last element from a Vec?","expected":[{"item_path":"std::vec::Vec::pop"},{"source_path":"std/vec/struct.Vec.html","text_contains":"pop"}]}
+{"id":"vec_len","question":"How do I get the length of a Vec in Rust?","expected":[{"item_path":"std::vec::Vec::len"},{"source_path":"std/vec/struct.Vec.html","text_contains":"len"}]}
+{"id":"string_push_str","question":"How do I append a string slice to a String?","expected":[{"item_path":"std::string::String::push_str"},{"source_path":"std/string/struct.String.html","text_contains":"push_str"}]}
+{"id":"string_as_str","question":"How do I borrow a String as str?","expected":[{"item_path":"std::string::String::as_str"},{"source_path":"std/string/struct.String.html","text_contains":"as_str"}]}
+{"id":"option_map","question":"How do I transform the value inside an Option?","expected":[{"item_path":"std::option::Option::map"},{"source_path":"std/option/enum.Option.html","text_contains":"map"}]}
+{"id":"option_and_then","question":"How do I chain computations that return Option?","expected":[{"item_path":"std::option::Option::and_then"},{"source_path":"std/option/enum.Option.html","text_contains":"and_then"}]}
+{"id":"result_map_err","question":"How do I transform the error inside a Result?","expected":[{"item_path":"std::result::Result::map_err"},{"source_path":"std/result/enum.Result.html","text_contains":"map_err"}]}
+{"id":"iterator_map","question":"How do I lazily transform every item in an iterator?","expected":[{"item_path":"std::iter::Iterator::map"},{"source_path":"std/iter/trait.Iterator.html","text_contains":"map"}]}
+{"id":"iterator_collect","question":"How do I collect an iterator into a Vec?","expected":[{"item_path":"std::iter::Iterator::collect"},{"source_path":"std/iter/trait.Iterator.html","text_contains":"collect"}]}
+{"id":"hashmap_get","question":"How do I get a value from a HashMap by key?","expected":[{"item_path":"std::collections::HashMap::get"},{"source_path":"std/collections/struct.HashMap.html","text_contains":"get"}]}
+{"id":"hashmap_entry","question":"How do I insert into a HashMap only if the key is missing?","expected":[{"item_path":"std::collections::HashMap::entry"},{"source_path":"std/collections/struct.HashMap.html","text_contains":"entry"}]}
+{"id":"box_new","question":"How do I allocate a value on the heap with Box?","expected":[{"item_path":"std::boxed::Box::new"},{"source_path":"std/boxed/struct.Box.html","text_contains":"new"}]}
+{"id":"rc_clone","question":"How do I clone an Rc pointer?","expected":[{"item_path":"std::rc::Rc::clone"},{"source_path":"std/rc/struct.Rc.html","text_contains":"clone"}]}
+{"id":"arc_clone","question":"How do I share ownership across threads with Arc?","expected":[{"item_path":"std::sync::Arc"},{"source_path":"std/sync/struct.Arc.html"},{"title_contains":"Arc"}]}
+{"id":"mutex_lock","question":"How do I lock a Mutex in Rust?","expected":[{"item_path":"std::sync::Mutex::lock"},{"source_path":"std/sync/struct.Mutex.html","text_contains":"lock"}]}
+{"id":"ownership_borrowing","question":"How do references and borrowing work in Rust?","expected":[{"source_path":"book/ch04-02-references-and-borrowing.html"},{"title_contains":"References and Borrowing"}]}
+{"id":"move_semantics","question":"What happens when ownership is moved in Rust?","expected":[{"source_path":"book/ch04-01-what-is-ownership.html"},{"title_contains":"ownership"}]}
+{"id":"lifetime_syntax","question":"What are lifetime annotations in Rust?","expected":[{"source_path":"book/ch10-03-lifetime-syntax.html"},{"title_contains":"lifetime"}]}
+{"id":"trait_objects","question":"How do trait objects enable dynamic dispatch?","expected":[{"source_path":"book/ch18-02-trait-objects.html"},{"title_contains":"trait object"}]}
+{"id":"match_expression","question":"How does a match expression choose an arm?","expected":[{"source_path":"reference/expressions/match-expr.html"},{"title_contains":"match"}]}
+{"id":"if_let","question":"When should I use if let in Rust?","expected":[{"source_path":"book/ch06-03-if-let.html"},{"title_contains":"if let"}]}
+{"id":"closure_expression","question":"How do Rust closures capture variables?","expected":[{"source_path":"reference/expressions/closure-expr.html"},{"title_contains":"closure"}]}
+{"id":"async_closure","question":"How do async closures work in Rust?","expected":[{"source_path":"reference/expressions/closure-expr.html","text_contains":"async closures"},{"title_contains":"Async closures"}]}
+{"id":"cargo_test","question":"What does cargo test do?","expected":[{"source_path":"cargo/commands/cargo-test.html"},{"title_contains":"cargo test"}]}
+{"id":"cargo_run","question":"What does cargo run do?","expected":[{"source_path":"cargo/commands/cargo-run.html"},{"title_contains":"cargo run"}]}
+{"id":"cargo_check","question":"How do I quickly check whether a crate compiles?","expected":[{"source_path":"cargo/commands/cargo-check.html"},{"title_contains":"cargo check"}]}
+{"id":"cargo_doc","question":"How do I build documentation with Cargo?","expected":[{"source_path":"cargo/commands/cargo-doc.html"},{"title_contains":"cargo doc"}]}
+{"id":"cargo_dependencies","question":"How do I specify dependencies in Cargo.toml?","expected":[{"source_path":"cargo/reference/specifying-dependencies.html"},{"title_contains":"dependencies"}]}

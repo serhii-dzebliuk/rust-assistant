@@ -17,6 +17,14 @@ def _candidate(text: str) -> RerankingCandidate:
     return RerankingCandidate(chunk_id=ChunkId(uuid4()), text=text)
 
 
+def _client(client: httpx.AsyncClient) -> TeiRerankingClient:
+    return TeiRerankingClient(
+        client=client,
+        base_url="http://tei",
+        max_batch_items=32,
+    )
+
+
 @pytest.mark.asyncio
 async def test_rerank_posts_tei_request_and_maps_response():
     first = _candidate("first")
@@ -42,7 +50,7 @@ async def test_rerank_posts_tei_request_and_maps_response():
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        results = await TeiRerankingClient(client=client, base_url="http://tei").rerank(
+        results = await _client(client).rerank(
             "async",
             [first, second],
         )
@@ -99,7 +107,7 @@ async def test_rerank_returns_without_request_for_empty_candidates():
         raise AssertionError("No request expected")
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        results = await TeiRerankingClient(client=client, base_url="http://tei").rerank(
+        results = await _client(client).rerank(
             "async",
             [],
         )
@@ -114,7 +122,7 @@ async def test_rerank_includes_tei_response_body_in_http_error():
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(httpx.HTTPStatusError, match="Model is overloaded"):
-            await TeiRerankingClient(client=client, base_url="http://tei").rerank(
+            await _client(client).rerank(
                 "async",
                 [_candidate("first")],
             )

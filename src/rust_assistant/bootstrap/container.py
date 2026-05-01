@@ -9,6 +9,8 @@ import httpx
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from rust_assistant.application.services.retrieval.pipeline import RetrievalPipeline
+from rust_assistant.application.use_cases.chat import ChatUseCase
 from rust_assistant.application.use_cases.search import SearchUseCase
 from rust_assistant.bootstrap.logging import configure_logging
 from rust_assistant.bootstrap.settings import LoggingSettings, Settings, get_settings
@@ -41,6 +43,7 @@ class RuntimeContainer:
     settings: Settings
     sqlalchemy: SqlAlchemyConfig
     search_use_case: Optional[SearchUseCase] = None
+    chat_use_case: Optional[ChatUseCase] = None
     db_engine: Optional[AsyncEngine] = None
     http_client: Optional[httpx.AsyncClient] = None
     qdrant_client: Optional[AsyncQdrantClient] = None
@@ -164,23 +167,29 @@ def build_container(
     session_factory = _require_session_factory(build_session_factory(db_engine))
     http_client = _build_http_client(runtime_settings)
     qdrant_client = _build_qdrant_client(runtime_settings)
+    retrieval_pipeline = RetrievalPipeline(
+        embedding_client=_build_embedding_client(
+            settings=runtime_settings,
+            http_client=http_client,
+        ),
+        vector_storage=_build_vector_storage(
+            settings=runtime_settings,
+            qdrant_client=qdrant_client,
+        ),
+        reranking_client=_build_reranking_client(
+            settings=runtime_settings,
+            http_client=http_client,
+        ),
+        uow=SqlAlchemyUnitOfWork(session_factory),
+    )
     return RuntimeContainer(
         settings=runtime_settings,
         sqlalchemy=sqlalchemy_config,
         search_use_case=SearchUseCase(
-            embedding_client=_build_embedding_client(
-                settings=runtime_settings,
-                http_client=http_client,
-            ),
-            vector_storage=_build_vector_storage(
-                settings=runtime_settings,
-                qdrant_client=qdrant_client,
-            ),
-            reranking_client=_build_reranking_client(
-                settings=runtime_settings,
-                http_client=http_client,
-            ),
-            uow=SqlAlchemyUnitOfWork(session_factory),
+            retrieval_pipeline=retrieval_pipeline,
+        ),
+        chat_use_case=ChatUseCase(
+            retrieval_pipeline=retrieval_pipeline,
         ),
         db_engine=db_engine,
         http_client=http_client,
