@@ -3,7 +3,6 @@ import pytest
 from rust_assistant.bootstrap.container import RuntimeConfigurationError, build_container
 from rust_assistant.bootstrap.settings import build_settings
 
-
 pytestmark = pytest.mark.unit
 
 
@@ -32,4 +31,35 @@ def test_build_container_requires_reranker_base_url_when_search_enabled():
     )
 
     with pytest.raises(RuntimeConfigurationError, match="RERANKER_BASE_URL"):
+        build_container(settings=settings, include_search=True)
+
+
+def test_build_container_requires_openai_model_when_search_enabled():
+    settings = build_settings(
+        {
+            "DATABASE_URL": "postgresql+asyncpg://app:secret@postgres:5432/docs",
+            "QDRANT_URL": "http://qdrant:6333",
+            "QDRANT_VECTOR_SIZE": "768",
+            "EMBEDDING_BASE_URL": "http://tei-embedder:80",
+            "RERANKER_BASE_URL": "http://tei-reranker:80",
+        }
+    )
+
+    with pytest.raises(RuntimeConfigurationError, match="OPENAI_MODEL"):
+        build_container(settings=settings, include_search=True)
+
+
+def test_build_container_requires_openai_api_key_when_search_enabled():
+    settings = build_settings(
+        {
+            "DATABASE_URL": "postgresql+asyncpg://app:secret@postgres:5432/docs",
+            "QDRANT_URL": "http://qdrant:6333",
+            "QDRANT_VECTOR_SIZE": "768",
+            "EMBEDDING_BASE_URL": "http://tei-embedder:80",
+            "RERANKER_BASE_URL": "http://tei-reranker:80",
+            "OPENAI_MODEL": "gpt-5-mini",
+        }
+    )
+
+    with pytest.raises(RuntimeConfigurationError, match="OPENAI_API_KEY"):
         build_container(settings=settings, include_search=True)

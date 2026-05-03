@@ -5,8 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from rust_assistant.bootstrap.api import create_app
+from rust_assistant.application.use_cases.chat import ChatQuestionTooLargeError, ChatResult
 from rust_assistant.application.use_cases.search import SearchResult, SearchResultHit
-
 
 pytestmark = pytest.mark.integration
 
@@ -38,14 +38,31 @@ class FakeSearchUseCase:
         )
 
 
+class FakeChatUseCase:
+    def __init__(self):
+        self.commands = []
+        self.error = None
+
+    async def execute(self, command):
+        self.commands.append(command)
+        if self.error is not None:
+            raise self.error
+        return ChatResult(answer=f"Answer for {command.question}")
+
+
 @pytest.fixture
 def search_use_case():
     return FakeSearchUseCase()
 
 
 @pytest.fixture
-def client(search_use_case: FakeSearchUseCase):
-    container = SimpleNamespace(search_use_case=search_use_case)
+def chat_use_case():
+    return FakeChatUseCase()
+
+
+@pytest.fixture
+def client(search_use_case: FakeSearchUseCase, chat_use_case: FakeChatUseCase):
+    container = SimpleNamespace(search_use_case=search_use_case, chat_use_case=chat_use_case)
     with TestClient(create_app(container=container)) as test_client:
         yield test_client
 
@@ -123,21 +140,59 @@ def test_search_rejects_invalid_requests(client: TestClient, payload):
     assert response.status_code == 422
 
 
-def test_system_endpoints_return_runtime_status(client: TestClient):
+def test_health_endpoint_returns_runtime_status(client: TestClient):
     health_response = client.get("/health")
-    ready_response = client.get("/ready")
 
     assert health_response.status_code == 200
-    assert ready_response.status_code == 200
     assert health_response.json() == {"status": "ok"}
-    assert ready_response.json() == {"status": "ready", "ready": True}
+    assert client.get("/ready").status_code == 404
 
 
-def test_unimplemented_chat_still_returns_not_implemented(client: TestClient):
-    chat_response = client.post("/chat", json={"question": "What is async?"})
+def test_chat_maps_request_to_use_case_and_returns_answer_only(
+    client: TestClient,
+    chat_use_case: FakeChatUseCase,
+):
+    chat_response = client.post("/chat", json={"question": " What is async? "})
 
-    assert chat_response.status_code == 501
-    assert chat_response.json()["detail"] == "Not implemented"
+    assert chat_response.status_code == 200
+    assert chat_response.json() == {"answer": "Answer for What is async?"}
+    assert chat_use_case.commands[0].question == "What is async?"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"question": "   "},
+        {"question": "async", "k": 5},
+        {"question": "async", "retrieval_limit": 20},
+        {"question": "async", "use_reranking": False},
+    ],
+)
+def test_chat_rejects_invalid_requests(client: TestClient, payload):
+    response = client.post("/chat", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_chat_returns_422_for_too_large_question(
+    client: TestClient,
+    chat_use_case: FakeChatUseCase,
+):
+    chat_use_case.error = ChatQuestionTooLargeError("Question is too large; maximum is 1000 tokens")
+
+    response = client.post("/chat", json={"question": "async"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Question is too large; maximum is 1000 tokens"
+
+
+def test_chat_returns_503_when_not_configured(search_use_case: FakeSearchUseCase):
+    container = SimpleNamespace(search_use_case=search_use_case, chat_use_case=None)
+    with TestClient(create_app(container=container)) as test_client:
+        response = test_client.post("/chat", json={"question": "async"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Chat is not configured"
 
 
 def test_old_api_prefixed_routes_are_not_exposed(client: TestClient):

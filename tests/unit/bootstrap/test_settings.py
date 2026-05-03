@@ -10,9 +10,6 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
 
     assert settings.app.host == "0.0.0.0"
     assert settings.app.port == 8000
-    assert settings.app.reload is False
-    assert settings.dependencies.postgres == "not_configured"
-    assert settings.dependencies.qdrant == "not_configured"
     assert settings.postgres.echo is False
     assert settings.postgres.pool_size == 10
     assert settings.postgres.max_overflow == 10
@@ -31,6 +28,16 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.reranker.model is None
     assert settings.reranker.base_url is None
     assert settings.reranker.max_batch_items == 32
+    assert settings.openai.model is None
+    assert settings.openai.api_key is None
+    assert settings.openai.max_output_tokens == 500
+    assert settings.openai.temperature == 0.2
+    assert settings.openai.request_timeout_seconds == 60.0
+    assert settings.chat.retrieval_limit == 20
+    assert settings.chat.reranking_limit == 5
+    assert settings.chat.use_reranking is True
+    assert settings.chat.max_query_tokens == 1000
+    assert settings.chat.max_context_tokens == 2500
     assert settings.ingest.raw_docs_dir is None
     assert settings.ingest.max_chunk_chars == 1400
     assert settings.ingest.min_chunk_chars == 180
@@ -41,9 +48,6 @@ def test_build_settings_parses_explicit_values():
         {
             "HOST": "127.0.0.1",
             "PORT": "9000",
-            "RELOAD": "true",
-            "POSTGRES_STATUS": "ready",
-            "QDRANT_STATUS": "connected",
             "LOG_LEVEL": "DEBUG",
             "LOG_FORMAT": "json",
             "POSTGRES_DB": "docs",
@@ -58,8 +62,16 @@ def test_build_settings_parses_explicit_values():
             "QDRANT_VECTOR_SIZE": "768",
             "QDRANT_DISTANCE": "dot",
             "QDRANT_UPSERT_BATCH_SIZE": "128",
-            "LLM_PROVIDER": "openai",
-            "LLM_MODEL": "gpt-5",
+            "OPENAI_API_KEY": "sk-test",
+            "OPENAI_MODEL": "gpt-5",
+            "OPENAI_MAX_OUTPUT_TOKENS": "300",
+            "OPENAI_TEMPERATURE": "0.1",
+            "OPENAI_REQUEST_TIMEOUT_SECONDS": "45.5",
+            "CHAT_RETRIEVAL_LIMIT": "30",
+            "CHAT_RERANKING_LIMIT": "4",
+            "CHAT_USE_RERANKING": "false",
+            "CHAT_MAX_QUERY_TOKENS": "900",
+            "CHAT_MAX_CONTEXT_TOKENS": "2400",
             "EMBEDDING_MODEL": "microsoft/harrier-oss-v1-270m",
             "EMBEDDING_BASE_URL": "http://tei:80",
             "EMBEDDING_NORMALIZE": "false",
@@ -80,9 +92,6 @@ def test_build_settings_parses_explicit_values():
 
     assert settings.app.host == "127.0.0.1"
     assert settings.app.port == 9000
-    assert settings.app.reload is True
-    assert settings.dependencies.postgres == "ready"
-    assert settings.dependencies.qdrant == "connected"
     assert settings.postgres.database == "docs"
     assert settings.postgres.user == "app"
     assert settings.postgres.password == "secret"
@@ -95,8 +104,16 @@ def test_build_settings_parses_explicit_values():
     assert settings.qdrant.vector_size == 768
     assert settings.qdrant.distance == "dot"
     assert settings.qdrant.upsert_batch_size == 128
-    assert settings.llm.provider == "openai"
-    assert settings.llm.model == "gpt-5"
+    assert settings.openai.model == "gpt-5"
+    assert settings.openai.api_key == "sk-test"
+    assert settings.openai.max_output_tokens == 300
+    assert settings.openai.temperature == 0.1
+    assert settings.openai.request_timeout_seconds == 45.5
+    assert settings.chat.retrieval_limit == 30
+    assert settings.chat.reranking_limit == 4
+    assert settings.chat.use_reranking is False
+    assert settings.chat.max_query_tokens == 900
+    assert settings.chat.max_context_tokens == 2400
     assert settings.embedding.model == "microsoft/harrier-oss-v1-270m"
     assert settings.embedding.base_url == "http://tei:80"
     assert settings.embedding.normalize is False
@@ -118,9 +135,9 @@ def test_build_settings_parses_explicit_values():
 
 def test_build_settings_rejects_invalid_boolean_values():
     try:
-        build_settings({"RELOAD": "sometimes"})
+        build_settings({"CHAT_USE_RERANKING": "sometimes"})
     except ValueError as exc:
-        assert "RELOAD" in str(exc)
+        assert "CHAT_USE_RERANKING" in str(exc)
     else:
         raise AssertionError("Expected build_settings to reject invalid boolean values")
 
@@ -131,6 +148,16 @@ def test_build_settings_rejects_min_chunk_chars_above_max():
             {
                 "INGEST_MAX_CHUNK_CHARS": "100",
                 "INGEST_MIN_CHUNK_CHARS": "101",
+            }
+        )
+
+
+def test_build_settings_rejects_chat_reranking_limit_above_retrieval_limit():
+    with pytest.raises(ValueError, match="CHAT_RERANKING_LIMIT"):
+        build_settings(
+            {
+                "CHAT_RETRIEVAL_LIMIT": "4",
+                "CHAT_RERANKING_LIMIT": "5",
             }
         )
 

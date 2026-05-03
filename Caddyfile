@@ -2,7 +2,7 @@
     encode gzip zstd
 
     reverse_proxy backend:{$PORT} {
-        health_uri /ready
+        health_uri /health
         health_interval 10s
         health_timeout 3s
     }

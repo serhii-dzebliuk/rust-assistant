@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
-
-from .search import SearchHit
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ChatRequest(BaseModel):
     """Request body for POST /chat."""
 
+    model_config = ConfigDict(extra="forbid")
+
     question: str = Field(..., min_length=1, max_length=1000)
-    k: int = Field(default=5, ge=1, le=20)
 
     @field_validator("question")
     @classmethod
@@ -26,4 +25,3 @@ class ChatResponse(BaseModel):
     """Response body for POST /chat."""
 
     answer: str
-    sources: list[SearchHit] = Field(default_factory=list[SearchHit])

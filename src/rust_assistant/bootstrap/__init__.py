@@ -9,11 +9,11 @@ from rust_assistant.bootstrap.container import (
 from rust_assistant.bootstrap.logging import JsonFormatter, configure_logging
 from rust_assistant.bootstrap.settings import (
     AppSettings,
-    DependencyStatusSettings,
+    ChatSettings,
     EmbeddingSettings,
     IngestSettings,
-    LLMSettings,
     LoggingSettings,
+    OpenAISettings,
     PostgresSettings,
     ProxySettings,
     QdrantSettings,
@@ -25,12 +25,12 @@ from rust_assistant.bootstrap.settings import (
 
 __all__ = [
     "AppSettings",
-    "DependencyStatusSettings",
+    "ChatSettings",
     "EmbeddingSettings",
     "IngestSettings",
     "JsonFormatter",
-    "LLMSettings",
     "LoggingSettings",
+    "OpenAISettings",
     "PostgresSettings",
     "ProxySettings",
     "QdrantSettings",

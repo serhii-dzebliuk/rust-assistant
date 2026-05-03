@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Final, Mapping, Optional
@@ -19,10 +19,10 @@ class Settings:
     """Full application settings tree."""
 
     app: AppSettings
-    dependencies: DependencyStatusSettings
     postgres: PostgresSettings
     qdrant: QdrantSettings
-    llm: LLMSettings
+    openai: OpenAISettings
+    chat: ChatSettings
     embedding: EmbeddingSettings
     reranker: RerankerSettings
     ingest: IngestSettings
@@ -36,15 +36,17 @@ class AppSettings:
 
     host: str
     port: int
-    reload: bool
 
 
 @dataclass(slots=True, frozen=True)
-class DependencyStatusSettings:
-    """Dependency status values exposed by readiness endpoints."""
+class OpenAISettings:
+    """OpenAI provider settings."""
 
-    postgres: str
-    qdrant: str
+    model: Optional[str]
+    api_key: Optional[str] = field(repr=False)
+    max_output_tokens: int
+    temperature: float
+    request_timeout_seconds: float
 
 
 @dataclass(slots=True, frozen=True)
@@ -72,11 +74,14 @@ class QdrantSettings:
 
 
 @dataclass(slots=True, frozen=True)
-class LLMSettings:
-    """LLM provider settings."""
+class ChatSettings:
+    """Chat and RAG behavior settings."""
 
-    provider: Optional[str]
-    model: Optional[str]
+    retrieval_limit: int
+    reranking_limit: int
+    use_reranking: bool
+    max_query_tokens: int
+    max_context_tokens: int
 
 
 @dataclass(slots=True, frozen=True)
@@ -131,11 +136,6 @@ def build_settings(env: Mapping[str, str]) -> Settings:
     app = AppSettings(
         host=_read_str(env, "HOST", default="0.0.0.0"),
         port=_read_int(env, "PORT", default=8000),
-        reload=_read_bool(env, "RELOAD", default=False),
-    )
-    dependencies = DependencyStatusSettings(
-        postgres=_read_str(env, "POSTGRES_STATUS", default="not_configured"),
-        qdrant=_read_str(env, "QDRANT_STATUS", default="not_configured"),
     )
     postgres = PostgresSettings(
         database=_read_optional_str(env, "POSTGRES_DB"),
@@ -153,10 +153,26 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         distance=_read_str(env, "QDRANT_DISTANCE", default="cosine"),
         upsert_batch_size=_read_int(env, "QDRANT_UPSERT_BATCH_SIZE", default=256),
     )
-    llm = LLMSettings(
-        provider=_read_optional_str(env, "LLM_PROVIDER"),
-        model=_read_optional_str(env, "LLM_MODEL"),
+    openai = OpenAISettings(
+        model=_read_optional_str(env, "OPENAI_MODEL"),
+        api_key=_read_optional_str(env, "OPENAI_API_KEY"),
+        max_output_tokens=_read_int(env, "OPENAI_MAX_OUTPUT_TOKENS", default=500),
+        temperature=_read_non_negative_float(env, "OPENAI_TEMPERATURE", default=0.2),
+        request_timeout_seconds=_read_float(
+            env,
+            "OPENAI_REQUEST_TIMEOUT_SECONDS",
+            default=60.0,
+        ),
     )
+    chat = ChatSettings(
+        retrieval_limit=_read_int(env, "CHAT_RETRIEVAL_LIMIT", default=20),
+        reranking_limit=_read_int(env, "CHAT_RERANKING_LIMIT", default=5),
+        use_reranking=_read_bool(env, "CHAT_USE_RERANKING", default=True),
+        max_query_tokens=_read_int(env, "CHAT_MAX_QUERY_TOKENS", default=1000),
+        max_context_tokens=_read_int(env, "CHAT_MAX_CONTEXT_TOKENS", default=2500),
+    )
+    if chat.reranking_limit > chat.retrieval_limit:
+        raise ValueError("CHAT_RERANKING_LIMIT must be <= CHAT_RETRIEVAL_LIMIT")
     embedding = EmbeddingSettings(
         model=_read_optional_str(env, "EMBEDDING_MODEL"),
         base_url=_read_optional_str(env, "EMBEDDING_BASE_URL"),
@@ -194,10 +210,10 @@ def build_settings(env: Mapping[str, str]) -> Settings:
     proxy = ProxySettings(public_base_url=_read_optional_str(env, "PUBLIC_BASE_URL"))
     return Settings(
         app=app,
-        dependencies=dependencies,
         postgres=postgres,
         qdrant=qdrant,
-        llm=llm,
+        openai=openai,
+        chat=chat,
         embedding=embedding,
         reranker=reranker,
         ingest=ingest,
@@ -297,6 +313,27 @@ def _read_float(
 
     if value <= minimum:
         raise ValueError(f"Environment variable {name} must be > {minimum:g}")
+    return value
+
+
+def _read_non_negative_float(
+    env: Mapping[str, str],
+    name: str,
+    *,
+    default: float,
+) -> float:
+    """Read and validate a float value that may be zero."""
+    raw_value = env.get(name)
+    if raw_value is None or not raw_value.strip():
+        value = default
+    else:
+        try:
+            value = float(raw_value.strip())
+        except ValueError as exc:
+            raise ValueError(f"Environment variable {name} must be a number") from exc
+
+    if value < 0.0:
+        raise ValueError(f"Environment variable {name} must be >= 0")
     return value
 
 

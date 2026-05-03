@@ -9,6 +9,7 @@ import httpx
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from rust_assistant.application.services.prompt_builder import PromptBuilder
 from rust_assistant.application.services.retrieval.pipeline import RetrievalPipeline
 from rust_assistant.application.use_cases.chat import ChatUseCase
 from rust_assistant.application.use_cases.search import SearchUseCase
@@ -24,8 +25,12 @@ from rust_assistant.infrastructure.adapters.data_storage.sqlalchemy.uow import S
 from rust_assistant.infrastructure.adapters.embedding.tei.tei_embedding_client import (
     TeiEmbeddingClient,
 )
+from rust_assistant.infrastructure.adapters.llm.openai.openai_llm_client import OpenAILLMClient
 from rust_assistant.infrastructure.adapters.reranking.tei.tei_reranking_client import (
     TeiRerankingClient,
+)
+from rust_assistant.infrastructure.adapters.tokenization.tiktoken.tiktoken_tokenizer import (
+    TiktokenTokenizer,
 )
 from rust_assistant.infrastructure.adapters.vector_storage.qdrant.qdrant_vector_storage import (
     QdrantVectorStorage,
@@ -147,6 +152,48 @@ def _build_vector_storage(
     )
 
 
+def _build_openai_client(settings: Settings):
+    if settings.openai.api_key is None:
+        raise RuntimeConfigurationError(
+            "OPENAI_API_KEY must be configured before serving chat requests"
+        )
+    try:
+        from openai import AsyncOpenAI
+    except ImportError as exc:
+        raise RuntimeConfigurationError(
+            "openai must be installed before serving chat requests"
+        ) from exc
+
+    return AsyncOpenAI(
+        api_key=settings.openai.api_key,
+        timeout=settings.openai.request_timeout_seconds,
+    )
+
+
+def _build_llm_client(settings: Settings) -> OpenAILLMClient:
+    if settings.openai.model is None:
+        raise RuntimeConfigurationError(
+            "OPENAI_MODEL must be configured before serving chat requests"
+        )
+    return OpenAILLMClient(
+        client=_build_openai_client(settings),
+        model=settings.openai.model,
+        max_output_tokens=settings.openai.max_output_tokens,
+        temperature=settings.openai.temperature,
+    )
+
+
+def _build_chat_tokenizer(settings: Settings) -> TiktokenTokenizer:
+    if settings.openai.model is None:
+        raise RuntimeConfigurationError(
+            "OPENAI_MODEL must be configured before serving chat requests"
+        )
+    try:
+        return TiktokenTokenizer(settings.openai.model)
+    except (RuntimeError, ValueError) as exc:
+        raise RuntimeConfigurationError(str(exc)) from exc
+
+
 def build_container(
     *,
     settings: Optional[Settings] = None,
@@ -182,6 +229,11 @@ def build_container(
         ),
         uow=SqlAlchemyUnitOfWork(session_factory),
     )
+    chat_tokenizer = _build_chat_tokenizer(runtime_settings)
+    prompt_builder = PromptBuilder(
+        tokenizer=chat_tokenizer,
+        max_context_tokens=runtime_settings.chat.max_context_tokens,
+    )
     return RuntimeContainer(
         settings=runtime_settings,
         sqlalchemy=sqlalchemy_config,
@@ -190,6 +242,13 @@ def build_container(
         ),
         chat_use_case=ChatUseCase(
             retrieval_pipeline=retrieval_pipeline,
+            prompt_builder=prompt_builder,
+            llm_client=_build_llm_client(runtime_settings),
+            tokenizer=chat_tokenizer,
+            retrieval_limit=runtime_settings.chat.retrieval_limit,
+            reranking_limit=runtime_settings.chat.reranking_limit,
+            use_reranking=runtime_settings.chat.use_reranking,
+            max_query_tokens=runtime_settings.chat.max_query_tokens,
         ),
         db_engine=db_engine,
         http_client=http_client,
