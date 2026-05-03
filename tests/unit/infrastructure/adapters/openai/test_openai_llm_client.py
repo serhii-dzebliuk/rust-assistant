@@ -38,7 +38,6 @@ async def test_openai_llm_client_calls_responses_api_with_prepared_prompt():
         client=fake_client,
         model="gpt-test",
         max_output_tokens=500,
-        temperature=0.2,
     )
 
     response = await adapter.generate(
@@ -55,7 +54,6 @@ async def test_openai_llm_client_calls_responses_api_with_prepared_prompt():
             "instructions": "system",
             "input": "user",
             "max_output_tokens": 500,
-            "temperature": 0.2,
             "store": False,
         }
     ]

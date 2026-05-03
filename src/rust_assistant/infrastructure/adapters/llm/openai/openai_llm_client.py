@@ -16,12 +16,10 @@ class OpenAILLMClient:
         client: AsyncOpenAI,
         model: str,
         max_output_tokens: int,
-        temperature: float,
     ) -> None:
         self._client = client
         self._model = model
         self._max_output_tokens = max_output_tokens
-        self._temperature = temperature
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """Generate one answer from a prepared prompt."""
@@ -30,7 +28,6 @@ class OpenAILLMClient:
             instructions=request.system_prompt,
             input=request.user_prompt,
             max_output_tokens=self._max_output_tokens,
-            temperature=self._temperature,
             store=False,
         )
         usage = getattr(response, "usage", None)

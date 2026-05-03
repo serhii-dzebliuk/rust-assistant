@@ -31,7 +31,6 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.openai.model is None
     assert settings.openai.api_key is None
     assert settings.openai.max_output_tokens == 500
-    assert settings.openai.temperature == 0.2
     assert settings.openai.request_timeout_seconds == 60.0
     assert settings.chat.retrieval_limit == 20
     assert settings.chat.reranking_limit == 5
@@ -65,7 +64,6 @@ def test_build_settings_parses_explicit_values():
             "OPENAI_API_KEY": "sk-test",
             "OPENAI_MODEL": "gpt-5",
             "OPENAI_MAX_OUTPUT_TOKENS": "300",
-            "OPENAI_TEMPERATURE": "0.1",
             "OPENAI_REQUEST_TIMEOUT_SECONDS": "45.5",
             "CHAT_RETRIEVAL_LIMIT": "30",
             "CHAT_RERANKING_LIMIT": "4",
@@ -107,7 +105,6 @@ def test_build_settings_parses_explicit_values():
     assert settings.openai.model == "gpt-5"
     assert settings.openai.api_key == "sk-test"
     assert settings.openai.max_output_tokens == 300
-    assert settings.openai.temperature == 0.1
     assert settings.openai.request_timeout_seconds == 45.5
     assert settings.chat.retrieval_limit == 30
     assert settings.chat.reranking_limit == 4

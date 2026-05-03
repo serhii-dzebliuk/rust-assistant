@@ -45,7 +45,6 @@ class OpenAISettings:
     model: Optional[str]
     api_key: Optional[str] = field(repr=False)
     max_output_tokens: int
-    temperature: float
     request_timeout_seconds: float
 
 
@@ -157,7 +156,6 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         model=_read_optional_str(env, "OPENAI_MODEL"),
         api_key=_read_optional_str(env, "OPENAI_API_KEY"),
         max_output_tokens=_read_int(env, "OPENAI_MAX_OUTPUT_TOKENS", default=500),
-        temperature=_read_non_negative_float(env, "OPENAI_TEMPERATURE", default=0.2),
         request_timeout_seconds=_read_float(
             env,
             "OPENAI_REQUEST_TIMEOUT_SECONDS",
@@ -313,27 +311,6 @@ def _read_float(
 
     if value <= minimum:
         raise ValueError(f"Environment variable {name} must be > {minimum:g}")
-    return value
-
-
-def _read_non_negative_float(
-    env: Mapping[str, str],
-    name: str,
-    *,
-    default: float,
-) -> float:
-    """Read and validate a float value that may be zero."""
-    raw_value = env.get(name)
-    if raw_value is None or not raw_value.strip():
-        value = default
-    else:
-        try:
-            value = float(raw_value.strip())
-        except ValueError as exc:
-            raise ValueError(f"Environment variable {name} must be a number") from exc
-
-    if value < 0.0:
-        raise ValueError(f"Environment variable {name} must be >= 0")
     return value
 
 

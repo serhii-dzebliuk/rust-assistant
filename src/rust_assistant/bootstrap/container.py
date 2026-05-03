@@ -179,7 +179,6 @@ def _build_llm_client(settings: Settings) -> OpenAILLMClient:
         client=_build_openai_client(settings),
         model=settings.openai.model,
         max_output_tokens=settings.openai.max_output_tokens,
-        temperature=settings.openai.temperature,
     )
 
 
