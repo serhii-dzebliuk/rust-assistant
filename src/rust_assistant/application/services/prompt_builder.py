@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from rust_assistant.application.ports.tokenizer import Tokenizer
@@ -34,6 +35,8 @@ Restrictions:
 Language:
 - Answer in the same language as the user."""
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True, frozen=True)
 class BuiltPrompt:
@@ -60,7 +63,15 @@ class PromptBuilder:
 
     def build(self, *, question: str, chunks: list[RetrievedChunk]) -> BuiltPrompt:
         """Return model instructions and a user prompt with token-limited context."""
-        selected_chunks = self._select_context_chunks(chunks)
+        selected_chunks, context_tokens = self._select_context_chunks(chunks)
+        logger.info(
+            "Prompt context selected: candidate_chunks=%s selected_chunks=%s "
+            "context_tokens=%s max_context_tokens=%s",
+            len(chunks),
+            len(selected_chunks),
+            context_tokens,
+            self._max_context_tokens,
+        )
         return BuiltPrompt(
             system_prompt=self._system_prompt,
             user_prompt=_format_user_prompt(
@@ -71,16 +82,26 @@ class PromptBuilder:
             context_chunks=selected_chunks,
         )
 
-    def _select_context_chunks(self, chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    def _select_context_chunks(
+        self, chunks: list[RetrievedChunk]
+    ) -> tuple[list[RetrievedChunk], int]:
         selected_chunks: list[RetrievedChunk] = []
         total_tokens = 0
         for chunk in chunks:
             token_count = self._tokenizer.count_tokens(chunk.text)
             if total_tokens + token_count > self._max_context_tokens:
+                logger.info(
+                    "Prompt context budget reached: next_chunk_id=%s "
+                    "next_chunk_tokens=%s current_context_tokens=%s max_context_tokens=%s",
+                    chunk.chunk_id,
+                    token_count,
+                    total_tokens,
+                    self._max_context_tokens,
+                )
                 break
             selected_chunks.append(chunk)
             total_tokens += token_count
-        return selected_chunks
+        return selected_chunks, total_tokens
 
 
 def _format_user_prompt(
