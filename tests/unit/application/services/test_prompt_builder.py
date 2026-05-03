@@ -59,6 +59,25 @@ def test_prompt_builder_returns_separate_system_and_user_prompts():
     assert prompt.context_chunks == [chunk]
 
 
+def test_prompt_builder_system_prompt_keeps_rust_only_domain_guardrails():
+    chunk = _chunk(text="Borrowing lets code refer to a value without ownership.")
+    tokenizer = FakeTokenizer({chunk.text: 8})
+
+    prompt = PromptBuilder(tokenizer=tokenizer, max_context_tokens=10).build(
+        question="що таке боровінг?",
+        chunks=[chunk],
+    )
+
+    assert "answer questions only about Rust programming" in prompt.system_prompt
+    assert "ambiguous words, transliterations, typos" in prompt.system_prompt
+    assert "Do not switch to non-Rust domains" in prompt.system_prompt
+    assert "linguistics, biology" in prompt.system_prompt
+    assert "боровінг" in prompt.system_prompt
+    assert "овнершип" in prompt.system_prompt
+    assert "трейт" in prompt.system_prompt
+    assert "лайфтайм" in prompt.system_prompt
+
+
 def test_prompt_builder_keeps_first_chunks_that_fit_context_budget():
     first = _chunk(text="first")
     second = _chunk(text="second")
