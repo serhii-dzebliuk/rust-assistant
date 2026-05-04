@@ -18,6 +18,7 @@ from rust_assistant.application.use_cases.chat import (
 logger = logging.getLogger(__name__)
 
 MAX_TELEGRAM_MESSAGE_CHARS = 4000
+PROCESSING_MESSAGE_TEXT = "Обробляю запит..."
 
 router = Router(name="telegram_webhook")
 
@@ -51,16 +52,20 @@ async def handle_text_message(
         await message.answer("Chat is not configured yet. Please try again later.")
         return
 
+    processing_message = await message.answer(PROCESSING_MESSAGE_TEXT)
     try:
         result = await chat_use_case.execute(ChatCommand(question=question))
     except ChatQuestionTooLargeError as exc:
+        await _delete_processing_message(processing_message)
         await message.answer(str(exc))
         return
     except Exception:
         logger.exception("Telegram chat answer generation failed")
+        await _delete_processing_message(processing_message)
         await message.answer("Sorry, I could not generate an answer right now.")
         return
 
+    await _delete_processing_message(processing_message)
     for part in _split_telegram_text(result.answer):
         await message.answer(part)
 
@@ -69,6 +74,14 @@ async def handle_text_message(
 async def handle_non_text_message(message: Message) -> None:
     """Reject unsupported Telegram message types."""
     await message.answer("Please send a text question.")
+
+
+async def _delete_processing_message(message: Message) -> None:
+    """Best-effort cleanup for transient Telegram status messages."""
+    try:
+        await message.delete()
+    except Exception:
+        logger.debug("Could not delete Telegram processing message", exc_info=True)
 
 
 def _split_telegram_text(
