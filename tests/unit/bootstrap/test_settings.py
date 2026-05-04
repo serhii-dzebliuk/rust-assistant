@@ -40,6 +40,8 @@ def test_build_settings_uses_defaults_for_optional_runtime_values():
     assert settings.ingest.raw_docs_dir is None
     assert settings.ingest.max_chunk_chars == 1400
     assert settings.ingest.min_chunk_chars == 180
+    assert settings.telegram.bot_token is None
+    assert settings.telegram.webhook_secret is None
 
 
 def test_build_settings_parses_explicit_values():
@@ -85,6 +87,8 @@ def test_build_settings_parses_explicit_values():
             "INGEST_MAX_CHUNK_CHARS": "1200",
             "INGEST_MIN_CHUNK_CHARS": "120",
             "PUBLIC_BASE_URL": "https://example.com",
+            "TELEGRAM_BOT_TOKEN": "123456:token",
+            "TELEGRAM_WEBHOOK_SECRET": "webhook_secret-123",
         }
     )
 
@@ -128,6 +132,8 @@ def test_build_settings_parses_explicit_values():
     assert settings.logging.level == "DEBUG"
     assert settings.logging.format == "json"
     assert settings.proxy.public_base_url == "https://example.com"
+    assert settings.telegram.bot_token == "123456:token"
+    assert settings.telegram.webhook_secret == "webhook_secret-123"
 
 
 def test_build_settings_rejects_invalid_boolean_values():
@@ -155,6 +161,21 @@ def test_build_settings_rejects_chat_reranking_limit_above_retrieval_limit():
             {
                 "CHAT_RETRIEVAL_LIMIT": "4",
                 "CHAT_RERANKING_LIMIT": "5",
+            }
+        )
+
+
+def test_build_settings_requires_telegram_secret_when_bot_token_is_set():
+    with pytest.raises(ValueError, match="TELEGRAM_WEBHOOK_SECRET"):
+        build_settings({"TELEGRAM_BOT_TOKEN": "123456:token"})
+
+
+def test_build_settings_rejects_invalid_telegram_webhook_secret():
+    with pytest.raises(ValueError, match="TELEGRAM_WEBHOOK_SECRET"):
+        build_settings(
+            {
+                "TELEGRAM_BOT_TOKEN": "123456:token",
+                "TELEGRAM_WEBHOOK_SECRET": "not allowed",
             }
         )
 

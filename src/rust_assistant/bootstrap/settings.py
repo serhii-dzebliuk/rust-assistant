@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -12,6 +13,7 @@ from dotenv import load_dotenv
 
 TRUE_VALUES: Final[frozenset[str]] = frozenset({"1", "true", "yes", "on"})
 FALSE_VALUES: Final[frozenset[str]] = frozenset({"0", "false", "no", "off"})
+TELEGRAM_WEBHOOK_SECRET_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 
 
 @dataclass(slots=True, frozen=True)
@@ -28,6 +30,7 @@ class Settings:
     ingest: IngestSettings
     logging: LoggingSettings
     proxy: ProxySettings
+    telegram: TelegramSettings
 
 
 @dataclass(slots=True, frozen=True)
@@ -130,6 +133,14 @@ class ProxySettings:
     public_base_url: Optional[str]
 
 
+@dataclass(slots=True, frozen=True)
+class TelegramSettings:
+    """Telegram bot frontend settings."""
+
+    bot_token: Optional[str] = field(repr=False)
+    webhook_secret: Optional[str] = field(repr=False)
+
+
 def build_settings(env: Mapping[str, str]) -> Settings:
     """Build the application settings tree from a mapping of environment values."""
     app = AppSettings(
@@ -206,6 +217,11 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         format=_read_str(env, "LOG_FORMAT", default="text"),
     )
     proxy = ProxySettings(public_base_url=_read_optional_str(env, "PUBLIC_BASE_URL"))
+    telegram = TelegramSettings(
+        bot_token=_read_optional_str(env, "TELEGRAM_BOT_TOKEN"),
+        webhook_secret=_read_optional_str(env, "TELEGRAM_WEBHOOK_SECRET"),
+    )
+    _validate_telegram_settings(telegram)
     return Settings(
         app=app,
         postgres=postgres,
@@ -217,6 +233,7 @@ def build_settings(env: Mapping[str, str]) -> Settings:
         ingest=ingest,
         logging=logging,
         proxy=proxy,
+        telegram=telegram,
     )
 
 
@@ -329,6 +346,20 @@ def _read_bool(env: Mapping[str, str], name: str, *, default: bool = False) -> b
         f"Environment variable {name} must be one of: "
         f"{', '.join(sorted(TRUE_VALUES | FALSE_VALUES))}"
     )
+
+
+def _validate_telegram_settings(settings: TelegramSettings) -> None:
+    """Validate Telegram-specific settings that depend on each other."""
+    if settings.bot_token is not None and settings.webhook_secret is None:
+        raise ValueError("TELEGRAM_WEBHOOK_SECRET is required when TELEGRAM_BOT_TOKEN is set")
+    if (
+        settings.webhook_secret is not None
+        and TELEGRAM_WEBHOOK_SECRET_PATTERN.fullmatch(settings.webhook_secret) is None
+    ):
+        raise ValueError(
+            "TELEGRAM_WEBHOOK_SECRET must be 1-256 characters using only "
+            "A-Z, a-z, 0-9, underscore, or hyphen"
+        )
 
 
 def load_settings() -> Settings:

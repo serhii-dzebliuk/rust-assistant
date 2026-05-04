@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import httpx
 from qdrant_client import AsyncQdrantClient
@@ -36,6 +36,9 @@ from rust_assistant.infrastructure.adapters.vector_storage.qdrant.qdrant_vector_
     QdrantVectorStorage,
 )
 
+if TYPE_CHECKING:
+    from aiogram import Bot, Dispatcher
+
 
 class RuntimeConfigurationError(ValueError):
     """Raised when runtime API dependencies cannot be built from settings."""
@@ -52,9 +55,13 @@ class RuntimeContainer:
     db_engine: Optional[AsyncEngine] = None
     http_client: Optional[httpx.AsyncClient] = None
     qdrant_client: Optional[AsyncQdrantClient] = None
+    telegram_bot: Optional["Bot"] = None
+    telegram_dispatcher: Optional["Dispatcher"] = None
 
     async def aclose(self) -> None:
         """Close runtime clients owned by the container."""
+        if self.telegram_bot is not None:
+            await self.telegram_bot.session.close()
         if self.http_client is not None:
             await self.http_client.aclose()
         if self.qdrant_client is not None:
@@ -182,6 +189,30 @@ def _build_llm_client(settings: Settings) -> OpenAILLMClient:
     )
 
 
+def _build_telegram_runtime(
+    *,
+    settings: Settings,
+    chat_use_case: ChatUseCase,
+) -> tuple[Optional["Bot"], Optional["Dispatcher"]]:
+    """Build optional aiogram runtime objects for the Telegram webhook entrypoint."""
+    if settings.telegram.bot_token is None:
+        return None, None
+    try:
+        from aiogram import Bot, Dispatcher
+    except ImportError as exc:
+        raise RuntimeConfigurationError(
+            "aiogram must be installed before serving Telegram webhook requests"
+        ) from exc
+
+    from rust_assistant.infrastructure.entrypoints.webhooks.telegram.handlers import (
+        register_telegram_handlers,
+    )
+
+    dispatcher = Dispatcher(chat_use_case=chat_use_case)
+    register_telegram_handlers(dispatcher)
+    return Bot(token=settings.telegram.bot_token), dispatcher
+
+
 def _build_chat_tokenizer(settings: Settings) -> TiktokenTokenizer:
     if settings.openai.model is None:
         raise RuntimeConfigurationError(
@@ -233,25 +264,33 @@ def build_container(
         tokenizer=chat_tokenizer,
         max_context_tokens=runtime_settings.chat.max_context_tokens,
     )
+    search_use_case = SearchUseCase(
+        retrieval_pipeline=retrieval_pipeline,
+    )
+    chat_use_case = ChatUseCase(
+        retrieval_pipeline=retrieval_pipeline,
+        prompt_builder=prompt_builder,
+        llm_client=_build_llm_client(runtime_settings),
+        tokenizer=chat_tokenizer,
+        retrieval_limit=runtime_settings.chat.retrieval_limit,
+        reranking_limit=runtime_settings.chat.reranking_limit,
+        use_reranking=runtime_settings.chat.use_reranking,
+        max_query_tokens=runtime_settings.chat.max_query_tokens,
+    )
+    telegram_bot, telegram_dispatcher = _build_telegram_runtime(
+        settings=runtime_settings,
+        chat_use_case=chat_use_case,
+    )
     return RuntimeContainer(
         settings=runtime_settings,
         sqlalchemy=sqlalchemy_config,
-        search_use_case=SearchUseCase(
-            retrieval_pipeline=retrieval_pipeline,
-        ),
-        chat_use_case=ChatUseCase(
-            retrieval_pipeline=retrieval_pipeline,
-            prompt_builder=prompt_builder,
-            llm_client=_build_llm_client(runtime_settings),
-            tokenizer=chat_tokenizer,
-            retrieval_limit=runtime_settings.chat.retrieval_limit,
-            reranking_limit=runtime_settings.chat.reranking_limit,
-            use_reranking=runtime_settings.chat.use_reranking,
-            max_query_tokens=runtime_settings.chat.max_query_tokens,
-        ),
+        search_use_case=search_use_case,
+        chat_use_case=chat_use_case,
         db_engine=db_engine,
         http_client=http_client,
         qdrant_client=qdrant_client,
+        telegram_bot=telegram_bot,
+        telegram_dispatcher=telegram_dispatcher,
     )
 
 

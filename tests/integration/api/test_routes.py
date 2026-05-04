@@ -50,6 +50,26 @@ class FakeChatUseCase:
         return ChatResult(answer=f"Answer for {command.question}")
 
 
+class FakeTelegramDispatcher:
+    def __init__(self):
+        self.calls = []
+
+    async def feed_update(self, bot, update):
+        self.calls.append((bot, update))
+
+
+class FakeTelegramBot:
+    def __init__(self):
+        self.webhook_calls = []
+        self.command_calls = []
+
+    async def set_webhook(self, *args, **kwargs):
+        self.webhook_calls.append((args, kwargs))
+
+    async def set_my_commands(self, commands):
+        self.command_calls.append(commands)
+
+
 @pytest.fixture
 def search_use_case():
     return FakeSearchUseCase()
@@ -193,6 +213,141 @@ def test_chat_returns_503_when_not_configured(search_use_case: FakeSearchUseCase
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Chat is not configured"
+
+
+def test_telegram_webhook_returns_503_when_not_configured(client: TestClient):
+    response = client.post(
+        "/webhooks/telegram",
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret"},
+        json={"update_id": 1},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Telegram webhook is not configured"
+
+
+def test_telegram_webhook_rejects_missing_or_invalid_secret(
+    search_use_case: FakeSearchUseCase,
+    chat_use_case: FakeChatUseCase,
+):
+    dispatcher = FakeTelegramDispatcher()
+    container = SimpleNamespace(
+        search_use_case=search_use_case,
+        chat_use_case=chat_use_case,
+        telegram_bot=object(),
+        telegram_dispatcher=dispatcher,
+        settings=SimpleNamespace(
+            telegram=SimpleNamespace(webhook_secret="secret"),
+            proxy=SimpleNamespace(public_base_url=None),
+        ),
+    )
+    with TestClient(create_app(container=container)) as test_client:
+        missing_response = test_client.post("/webhooks/telegram", json={"update_id": 1})
+        invalid_response = test_client.post(
+            "/webhooks/telegram",
+            headers={"X-Telegram-Bot-Api-Secret-Token": "wrong"},
+            json={"update_id": 1},
+        )
+
+    assert missing_response.status_code == 401
+    assert invalid_response.status_code == 401
+    assert dispatcher.calls == []
+
+
+def test_telegram_webhook_dispatches_valid_update(
+    search_use_case: FakeSearchUseCase,
+    chat_use_case: FakeChatUseCase,
+):
+    bot = object()
+    dispatcher = FakeTelegramDispatcher()
+    container = SimpleNamespace(
+        search_use_case=search_use_case,
+        chat_use_case=chat_use_case,
+        telegram_bot=bot,
+        telegram_dispatcher=dispatcher,
+        settings=SimpleNamespace(
+            telegram=SimpleNamespace(webhook_secret="secret"),
+            proxy=SimpleNamespace(public_base_url=None),
+        ),
+    )
+    payload = {
+        "update_id": 1,
+        "message": {
+            "message_id": 10,
+            "date": 1,
+            "chat": {"id": 20, "type": "private"},
+            "text": "What is async?",
+        },
+    }
+
+    with TestClient(create_app(container=container)) as test_client:
+        response = test_client.post(
+            "/webhooks/telegram",
+            headers={"X-Telegram-Bot-Api-Secret-Token": "secret"},
+            json=payload,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert len(dispatcher.calls) == 1
+    assert dispatcher.calls[0][0] is bot
+    assert dispatcher.calls[0][1].update_id == 1
+
+
+def test_telegram_webhook_rejects_malformed_update(
+    search_use_case: FakeSearchUseCase,
+    chat_use_case: FakeChatUseCase,
+):
+    dispatcher = FakeTelegramDispatcher()
+    container = SimpleNamespace(
+        search_use_case=search_use_case,
+        chat_use_case=chat_use_case,
+        telegram_bot=object(),
+        telegram_dispatcher=dispatcher,
+        settings=SimpleNamespace(
+            telegram=SimpleNamespace(webhook_secret="secret"),
+            proxy=SimpleNamespace(public_base_url=None),
+        ),
+    )
+
+    with TestClient(create_app(container=container)) as test_client:
+        response = test_client.post(
+            "/webhooks/telegram",
+            headers={"X-Telegram-Bot-Api-Secret-Token": "secret"},
+            json={},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Malformed Telegram update"
+    assert dispatcher.calls == []
+
+
+def test_telegram_webhook_is_registered_on_startup(
+    search_use_case: FakeSearchUseCase,
+    chat_use_case: FakeChatUseCase,
+):
+    bot = FakeTelegramBot()
+    container = SimpleNamespace(
+        search_use_case=search_use_case,
+        chat_use_case=chat_use_case,
+        telegram_bot=bot,
+        telegram_dispatcher=FakeTelegramDispatcher(),
+        settings=SimpleNamespace(
+            telegram=SimpleNamespace(webhook_secret="secret"),
+            proxy=SimpleNamespace(public_base_url="https://example.com/"),
+        ),
+    )
+
+    with TestClient(create_app(container=container)):
+        pass
+
+    assert len(bot.webhook_calls) == 1
+    args, kwargs = bot.webhook_calls[0]
+    assert args == ("https://example.com/webhooks/telegram",)
+    assert kwargs["allowed_updates"] == ["message"]
+    assert kwargs["drop_pending_updates"] is False
+    assert kwargs["secret_token"] == "secret"
+    assert bot.command_calls[0][0].command == "start"
 
 
 def test_old_api_prefixed_routes_are_not_exposed(client: TestClient):

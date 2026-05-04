@@ -13,6 +13,8 @@ def test_build_container_is_lightweight_by_default():
     assert container.db_engine is None
     assert container.http_client is None
     assert container.qdrant_client is None
+    assert container.telegram_bot is None
+    assert container.telegram_dispatcher is None
 
 
 def test_build_container_requires_search_runtime_settings_when_enabled():
